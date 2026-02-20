@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hero Mom - 프로토타입</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- 1. Top Status Bar -->
+        <header class="status-bar">
+            <div class="status-header">
+                <h2>아들 상태 <span id="son-level" style="font-weight: 500; color: #64748b; font-size: 0.9rem;">(Lv. 1)</span>
+                    <span id="son-weapon" class="weapon-badge tier-C">몽둥이 (공+1)</span>
+                </h2>
+                <div class="parent-resources">
+                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
+                </div>
+            </div>
+            <div class="bars">
+                <div class="bar-container"><div class="label">HP</div><div class="bar-bg"><div class="bar hp" id="bar-hp" style="width: 100%;"></div></div></div>
+                <div class="bar-container"><div class="label">허기</div><div class="bar-bg"><div class="bar hunger" id="bar-hunger" style="width: 100%;"></div></div></div>
+                <div class="bar-container"><div class="label">EXP</div><div class="bar-bg"><div class="bar exp" id="bar-exp" style="width: 0%;"></div></div></div>
+            </div>
+        </header>
+
+        <!-- 2. Room Navigation Tabs -->
+        <nav class="room-tabs">
+            <button class="room-tab active" data-room="room-bed">🛏️ 침실 <span class="son-indicator">👦🏻</span></button>
+            <button class="room-tab" data-room="room-desk">📚 서재 <span class="son-indicator">👦🏻</span></button>
+            <button class="room-tab" data-room="room-table">🍽️ 주방 <span class="son-indicator">👦🏻</span></button>
+            <button class="room-tab" data-room="room-dummy">🤺 훈련장 <span class="son-indicator">👦🏻</span></button>
+        </nav>
+
+        <!-- 3. Main Stage (Active Room) -->
+        <main class="house-view-container">
+            <!-- Bedroom -->
+            <div class="room-view active" id="view-room-bed">
+                <div class="furniture bed">
+                    🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div>
+                </div>
+            </div>
+            <!-- Study -->
+            <div class="room-view" id="view-room-desk">
+                <div class="furniture desk">
+                    📚<div class="furn-level">(Lv.<span id="lvl-desk">1</span>)</div>
+                    <!-- Study Slot -->
+                    <div class="interact-slot" id="slot-study" onclick="openInventory('study')">
+                        <span class="slot-label">책꽂이 빈칸</span>➕
+                    </div>
+                </div>
+            </div>
+            <!-- Kitchen -->
+            <div class="room-view" id="view-room-table">
+                <div class="furniture table">
+                    🍽️<div class="furn-level">(Lv.<span id="lvl-table">1</span>)</div>
+                    <!-- Kitchen Slot -->
+                    <div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')">
+                        <span class="slot-label">식탁 위 빈접시</span>➕
+                    </div>
+                </div>
+            </div>
+            <!-- Training -->
+            <div class="room-view" id="view-room-dummy">
+                <div class="furniture dummy">
+                    🤺<div class="furn-level">(Lv.<span id="lvl-dummy">1</span>)</div>
+                    <!-- Training Slot -->
+                    <div class="interact-slot" id="slot-training" onclick="openInventory('training')">
+                        <span class="slot-label">훈련 도구 슬롯</span>➕
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Son Sprite (Dynamically moved) -->
+            <div class="character son" id="son-sprite">
+                👦🏻<div class="speech-bubble" id="son-speech">뭐 할 거 없나...</div>
+            </div>
+        </main>
+
+        <!-- 4. Bottom Control Panel -->
+        <section class="control-panel">
+            <nav class="sys-tabs">
+                <button class="sys-tab active" data-sys="sys-shop">🛒 상점</button>
+                <button class="sys-tab" data-sys="sys-smith">🔨 대장간</button>
+                <button class="sys-tab" data-sys="sys-mail">✉️ 모험&소문</button>
+            </nav>
+            
+            <div class="sys-content active" id="sys-shop">
+                <h3 style="margin-bottom:5px;">상점 (아이템 구매 & 업그레이드)</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <!-- Buy Items -->
+                    <button class="action-btn" style="background:#10b981;" onclick="buyItem('steak', 100)">🥩 최고급 스테이크<br><small>(100G) 허기폭발</small></button>
+                    <button class="action-btn" style="background:#8b5cf6;" onclick="buyItem('book_hero', 150)">📘 영웅학 개론<br><small>(150G) 경험치폭발</small></button>
+                    <button class="action-btn" style="background:#f59e0b;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니<br><small>(200G) 훈련효율업</small></button>
+                    <button class="action-btn" id="btn-work" style="background:#64748b;">🪡 부업하기<br><small>(+10G)</small></button>
+                </div>
+            </div>
+            
+            <div class="sys-content" id="sys-smith">
+                <h3>대장간 (장비 가챠)</h3>
+                <button class="action-btn" id="btn-gacha" style="background-color: #0f172a;">🗡️ 무기 뽑기 (1,000G)</button>
+                <div id="gacha-result" class="gacha-result" style="display:none; margin-top:10px; padding:10px; border:1px dashed #ccc;">결과가 여기에 표시됩니다.</div>
+            </div>
+            
+            <div class="sys-content" id="sys-mail">
+                <h3>우편함 & 마을 소문</h3>
+                <ul class="mail-list" style="list-style:none;">
+                    <li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">📮 아직 도착한 편지가 없습니다.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Inventory Modal (For placing items) -->
+        <div class="modal-overlay" id="inv-modal">
+            <div class="modal-content">
+                <h3>인벤토리</h3>
+                <p style="font-size:0.85rem; margin-bottom:15px;">이 방에 배치할 아이템을 선택하세요.</p>
+                <div id="inv-list"></div>
+                <button class="action-btn" style="background:#ef4444; margin-top:15px;" onclick="closeInventory()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
