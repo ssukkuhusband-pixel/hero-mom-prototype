@@ -135,7 +135,7 @@ function updateUI() {
     if (gameState.son.quest) {
         els.questAlert.style.display = 'block';
         els.questTimer.innerText = gameState.son.quest.timer;
-        if(els.questModal.style.display === 'flex') els.questModalTimer.innerText = gameState.son.quest.timer;
+        if(els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) els.questModalTimer.innerText = gameState.son.quest.timer;
     } else {
         els.questAlert.style.display = 'none';
     }
