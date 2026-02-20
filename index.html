@@ -18,10 +18,23 @@
                     <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
                 </div>
             </div>
+            
+            <!-- Affinity Stats (New) -->
+            <div class="affinity-stats">
+                <div class="affinity-badge" title="신뢰도: 전투 지능 상승">🛡️ <span id="aff-trust">50</span></div>
+                <div class="affinity-badge" title="애정도: 집에서 회복량 상승">❤️ <span id="aff-affection">50</span></div>
+                <div class="affinity-badge" title="반항심: 훈련 거부 및 가출 확률" style="color:#ef4444;">⚡ <span id="aff-rebellion">0</span></div>
+            </div>
+
             <div class="bars">
                 <div class="bar-container"><div class="label">HP</div><div class="bar-bg"><div class="bar hp" id="bar-hp" style="width: 100%;"></div></div></div>
                 <div class="bar-container"><div class="label">허기</div><div class="bar-bg"><div class="bar hunger" id="bar-hunger" style="width: 100%;"></div></div></div>
                 <div class="bar-container"><div class="label">EXP</div><div class="bar-bg"><div class="bar exp" id="bar-exp" style="width: 0%;"></div></div></div>
+            </div>
+            
+            <!-- Quest Alert Banner (Hidden by default) -->
+            <div id="quest-alert" class="quest-alert" onclick="openQuestModal()" style="display: none;">
+                ❗ 아들의 부탁이 있습니다! (남은 시간: <span id="quest-timer">30</span>초)
             </div>
         </header>
 
@@ -35,47 +48,13 @@
 
         <!-- 3. Main Stage (Active Room) -->
         <main class="house-view-container">
-            <!-- Bedroom -->
-            <div class="room-view active" id="view-room-bed">
-                <div class="furniture bed">
-                    🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div>
-                </div>
-            </div>
-            <!-- Study -->
-            <div class="room-view" id="view-room-desk">
-                <div class="furniture desk">
-                    📚<div class="furn-level">(Lv.<span id="lvl-desk">1</span>)</div>
-                    <!-- Study Slot -->
-                    <div class="interact-slot" id="slot-study" onclick="openInventory('study')">
-                        <span class="slot-label">책꽂이 빈칸</span>➕
-                    </div>
-                </div>
-            </div>
-            <!-- Kitchen -->
-            <div class="room-view" id="view-room-table">
-                <div class="furniture table">
-                    🍽️<div class="furn-level">(Lv.<span id="lvl-table">1</span>)</div>
-                    <!-- Kitchen Slot -->
-                    <div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')">
-                        <span class="slot-label">식탁 위 빈접시</span>➕
-                    </div>
-                </div>
-            </div>
-            <!-- Training -->
-            <div class="room-view" id="view-room-dummy">
-                <div class="furniture dummy">
-                    🤺<div class="furn-level">(Lv.<span id="lvl-dummy">1</span>)</div>
-                    <!-- Training Slot -->
-                    <div class="interact-slot" id="slot-training" onclick="openInventory('training')">
-                        <span class="slot-label">훈련 도구 슬롯</span>➕
-                    </div>
-                </div>
-            </div>
+            <div class="room-view active" id="view-room-bed"><div class="furniture bed">🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div></div></div>
+            <div class="room-view" id="view-room-desk"><div class="furniture desk">📚<div class="furn-level">(Lv.<span id="lvl-desk">1</span>)</div><div class="interact-slot" id="slot-study" onclick="openInventory('study')"><span class="slot-label">책꽂이 빈칸</span>➕</div></div></div>
+            <div class="room-view" id="view-room-table"><div class="furniture table">🍽️<div class="furn-level">(Lv.<span id="lvl-table">1</span>)</div><div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')"><span class="slot-label">식탁 위 빈접시</span>➕</div></div></div>
+            <div class="room-view" id="view-room-dummy"><div class="furniture dummy">🤺<div class="furn-level">(Lv.<span id="lvl-dummy">1</span>)</div><div class="interact-slot" id="slot-training" onclick="openInventory('training')"><span class="slot-label">훈련 도구 슬롯</span>➕</div></div></div>
             
-            <!-- Son Sprite (Dynamically moved) -->
-            <div class="character son" id="son-sprite">
-                👦🏻<div class="speech-bubble" id="son-speech">뭐 할 거 없나...</div>
-            </div>
+            <!-- Son Sprite -->
+            <div class="character son" id="son-sprite">👦🏻<div class="speech-bubble" id="son-speech">뭐 할 거 없나...</div></div>
         </main>
 
         <!-- 4. Bottom Control Panel -->
@@ -85,24 +64,20 @@
                 <button class="sys-tab" data-sys="sys-smith">🔨 대장간</button>
                 <button class="sys-tab" data-sys="sys-mail">✉️ 모험&소문</button>
             </nav>
-            
             <div class="sys-content active" id="sys-shop">
                 <h3 style="margin-bottom:5px;">상점 (아이템 구매 & 업그레이드)</h3>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <!-- Buy Items -->
                     <button class="action-btn" style="background:#10b981;" onclick="buyItem('steak', 100)">🥩 최고급 스테이크<br><small>(100G) 허기폭발</small></button>
                     <button class="action-btn" style="background:#8b5cf6;" onclick="buyItem('book_hero', 150)">📘 영웅학 개론<br><small>(150G) 경험치폭발</small></button>
                     <button class="action-btn" style="background:#f59e0b;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니<br><small>(200G) 훈련효율업</small></button>
                     <button class="action-btn" id="btn-work" style="background:#64748b;">🪡 부업하기<br><small>(+10G)</small></button>
                 </div>
             </div>
-            
             <div class="sys-content" id="sys-smith">
                 <h3>대장간 (장비 가챠)</h3>
                 <button class="action-btn" id="btn-gacha" style="background-color: #0f172a;">🗡️ 무기 뽑기 (1,000G)</button>
-                <div id="gacha-result" class="gacha-result" style="display:none; margin-top:10px; padding:10px; border:1px dashed #ccc;">결과가 여기에 표시됩니다.</div>
+                <div id="gacha-result" class="gacha-result"></div>
             </div>
-            
             <div class="sys-content" id="sys-mail">
                 <h3>우편함 & 마을 소문</h3>
                 <ul class="mail-list" style="list-style:none;">
@@ -111,13 +86,27 @@
             </div>
         </section>
 
-        <!-- Inventory Modal (For placing items) -->
+        <!-- Inventory Modal -->
         <div class="modal-overlay" id="inv-modal">
             <div class="modal-content">
                 <h3>인벤토리</h3>
                 <p style="font-size:0.85rem; margin-bottom:15px;">이 방에 배치할 아이템을 선택하세요.</p>
                 <div id="inv-list"></div>
                 <button class="action-btn" style="background:#ef4444; margin-top:15px;" onclick="closeInventory()">닫기</button>
+            </div>
+        </div>
+
+        <!-- Quest Modal -->
+        <div class="modal-overlay" id="quest-modal">
+            <div class="modal-content">
+                <h3 style="color:#eab308;">❗ 아들의 부탁 ❗</h3>
+                <p id="quest-desc" style="font-size:0.95rem; margin:15px 0; font-weight:bold; color:#1e293b;">"엄마, 용돈 100골드만 주세요!"</p>
+                <p style="font-size:0.8rem; color:#ef4444; margin-bottom:15px;">남은 시간: <span id="quest-modal-timer">30</span>초</p>
+                
+                <div id="quest-actions" style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="action-btn" style="background:#3b82f6; margin-top:0;" id="btn-quest-accept">들어주기</button>
+                    <button class="action-btn" style="background:#94a3b8; margin-top:0;" onclick="rejectQuest()">거절하기 (반항심 증가)</button>
+                </div>
             </div>
         </div>
     </div>
