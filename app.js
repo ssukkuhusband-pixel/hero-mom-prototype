@@ -209,37 +209,60 @@ function handleActionCompletion() {
     gameState.son.state = 'IDLE';
 }
 
+
 function sonAI() {
-    if (gameState.son.state === 'ADVENTURING') return;
-    
-    // Process Quest Timeout
-    if (gameState.son.quest) handleQuestTick();
-    
-    if (gameState.son.actionTimer > 0) {
-        gameState.son.actionTimer--;
-        if (gameState.son.state === 'TRAINING') { gameState.son.hp -= 1; gameState.son.hunger -= 1; }
-        if (gameState.son.state === 'STUDYING') { gameState.son.hunger -= 0.5; }
-        if (gameState.son.actionTimer <= 0) handleActionCompletion();
-        
-        if (gameState.son.hp < 0) gameState.son.hp = 0; if (gameState.son.hunger < 0) gameState.son.hunger = 0;
-        checkLevelUp(); updateUI(); return; 
+    // 1. If currently adventuring, do nothing but tick quests
+    if (gameState.son.state === 'ADVENTURING') {
+        if (gameState.son.quest) handleQuestTick();
+        return;
     }
     
-    // IDLE AI
-    if (gameState.son.hp >= (gameState.son.maxHp * 0.8) && gameState.son.hunger >= (gameState.son.maxHunger * 0.8)) { startAdventure(); return; }
+    // 2. If locked in an action, tick down timer
+    if (gameState.son.actionTimer > 0) {
+        gameState.son.actionTimer--;
+        
+        // Passive stat drain while working
+        if (gameState.son.state === 'TRAINING') { gameState.son.hp -= 1; gameState.son.hunger -= 1; }
+        if (gameState.son.state === 'STUDYING') { gameState.son.hunger -= 0.5; }
+        
+        // Action complete
+        if (gameState.son.actionTimer <= 0) handleActionCompletion();
+        
+        // Clamp & Level Up check
+        if (gameState.son.hp < 0) gameState.son.hp = 0; if (gameState.son.hunger < 0) gameState.son.hunger = 0;
+        checkLevelUp(); 
+        
+        // Still tick quests while working
+        if (gameState.son.quest) handleQuestTick();
+        
+        updateUI(); 
+        return; 
+    }
+    
+    // --- DECISION MAKING (Only when IDLE / Action Completed) ---
+    
+    // Quest Tick
+    if (gameState.son.quest) handleQuestTick();
+    
+    // Priority 1: Adventure Condition (80% full)
+    if (gameState.son.hp >= (gameState.son.maxHp * 0.8) && gameState.son.hunger >= (gameState.son.maxHunger * 0.8)) { 
+        startAdventure(); 
+        return; 
+    }
 
-    // Random Quest Trigger
+    // Priority 2: Random Quest Trigger (Only when idle)
     triggerRandomQuest();
 
-    if (gameState.son.hp <= 40) {
+    // Priority 3: Needs & Growth
+    if (gameState.son.hp <= 50) {
         gameState.son.state = 'SLEEPING'; moveToRoom('room-bed'); gameState.son.actionTimer = 15; sonSpeech("졸려... 자러 갈게요.");
-    } else if (gameState.son.hunger <= 50) {
+    } else if (gameState.son.hunger <= 60) {
         gameState.son.state = 'EATING'; moveToRoom('room-table'); gameState.son.actionTimer = 10; sonSpeech("배고파! 밥 먹어야지.");
     } else {
-        // Rebellion Effect: Refuse to train/study
+        // Rebellion Effect
         if (gameState.son.affinity.rebellion > 50 && Math.random() > 0.5) {
             sonSpeech("아 다 귀찮아! 아무것도 안 할래!");
-            gameState.son.actionTimer = 5; // Idles for 5 seconds
+            gameState.son.actionTimer = 5; // Idle for 5s
         } else {
             if (Math.random() > 0.5) {
                 gameState.son.state = 'TRAINING'; moveToRoom('room-dummy'); gameState.son.actionTimer = 20; sonSpeech("훈련을 시작하지!");
