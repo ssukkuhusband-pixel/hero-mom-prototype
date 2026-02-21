@@ -60,17 +60,23 @@
         <!-- 4. Bottom Control Panel -->
         <section class="control-panel">
             <nav class="sys-tabs">
-                <button class="sys-tab active" data-sys="sys-shop">🛒 상점</button>
+                <button class="sys-tab active" data-sys="sys-work">🪡 부업</button>
+                <button class="sys-tab" data-sys="sys-shop">🛒 상점</button>
                 <button class="sys-tab" data-sys="sys-smith">🔨 대장간</button>
-                <button class="sys-tab" data-sys="sys-mail">✉️ 모험&소문</button>
+                <button class="sys-tab" data-sys="sys-mail">✉️ 모험</button>
             </nav>
-            <div class="sys-content active" id="sys-shop">
-                <h3 style="margin-bottom:5px;">상점 (아이템 구매 & 업그레이드)</h3>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <button class="action-btn" style="background:#10b981;" onclick="buyItem('steak', 100)">🥩 최고급 스테이크<br><small>(100G) 허기폭발</small></button>
-                    <button class="action-btn" style="background:#8b5cf6;" onclick="buyItem('book_hero', 150)">📘 영웅학 개론<br><small>(150G) 경험치폭발</small></button>
-                    <button class="action-btn" style="background:#f59e0b;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니<br><small>(200G) 훈련효율업</small></button>
-                    <button class="action-btn" id="btn-work" style="background:#64748b;">🪡 부업하기<br><small>(+10G)</small></button>
+            <div class="sys-content active" id="sys-work">
+                <h3 style="margin-bottom:5px;">집안일 (부업)</h3>
+                <p style="font-size:0.85rem; margin-bottom:10px;">아들 몰래 인형 눈알을 붙여 용돈을 법니다.</p>
+                <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.2rem;">🪡 바느질 하기 (+10 골드)</button>
+            </div>
+            <div class="sys-content" id="sys-shop">
+                <h3 style="margin-bottom:5px;">상점 (아이템 구매)</h3>
+                <p style="font-size:0.85rem; margin-bottom:10px;">방에 배치할 아이템을 미리 구매해두세요.</p>
+                <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+                    <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyItem('steak', 100)">🥩 최고급 스테이크 (100G) - 허기폭발</button>
+                    <button class="action-btn" style="background:#8b5cf6; margin-top:0;" onclick="buyItem('book_hero', 150)">📘 영웅학 개론 (150G) - 경험치폭발</button>
+                    <button class="action-btn" style="background:#f59e0b; margin-top:0;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니 (200G) - 훈련효율업</button>
                 </div>
             </div>
             <div class="sys-content" id="sys-smith">
