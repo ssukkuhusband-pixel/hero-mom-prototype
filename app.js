@@ -210,8 +210,12 @@ function handleActionCompletion() {
 }
 
 
+
 function sonAI() {
-    // 1. If currently adventuring, do nothing but tick quests
+    console.log("sonAI tick", gameState.son.state, "HP:", gameState.son.hp, "Hunger:", gameState.son.hunger, "Timer:", gameState.son.actionTimer);
+    
+    // 1. If currently adventuring
+
     if (gameState.son.state === 'ADVENTURING') {
         if (gameState.son.quest) handleQuestTick();
         return;
