@@ -143,3 +143,50 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     50% { transform: scale(1.02); }
     100% { transform: scale(1); }
 }
+
+/* Tamagotchi Stacked Layout for Son */
+.character.son {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    bottom: 25%;
+    left: 50%;
+    transform: translateX(40%);
+    transition: left 0.5s ease-in-out, opacity 0.3s;
+    z-index: 10;
+    cursor: pointer;
+    font-size: initial; /* Reset font size for container */
+}
+
+.son-emoji {
+    font-size: 4rem; /* Actual emoji size */
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+    transition: transform 0.2s;
+}
+.son-emoji:hover {
+    transform: scale(1.1);
+}
+
+.son-state-label {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-top: -5px; /* Pull it up slightly over the emoji */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    white-space: nowrap;
+    z-index: 11;
+}
+
+/* Adjust speech bubble position relative to the new flex container */
+.speech-bubble {
+    position: absolute;
+    top: -45px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Keep other existing bubble styles */
+}

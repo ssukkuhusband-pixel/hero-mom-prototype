@@ -42,7 +42,7 @@ const els = {
     sysTabs: document.querySelectorAll('.sys-tab'), sysContents: document.querySelectorAll('.sys-content'),
     btnWork: document.getElementById('btn-work'), btnGacha: document.getElementById('btn-gacha'), gachaResult: document.getElementById('gacha-result'), mailList: document.querySelector('.mail-list'),
     questAlert: document.getElementById('quest-alert'), questTimer: document.getElementById('quest-timer'),
-    questModal: document.getElementById('quest-modal'), questModalTimer: document.getElementById('quest-modal-timer'), questDesc: document.getElementById('quest-desc'), btnQuestAccept: document.getElementById('btn-quest-accept')
+    questModal: document.getElementById('quest-modal'), questModalTimer: document.getElementById('quest-modal-timer'), questDesc: document.getElementById('quest-desc'), btnQuestAccept: document.getElementById('btn-quest-accept'), sonStateLabel: document.getElementById('son-state-label')
 };
 
 const weaponsList = [ { name: '낡은 목검', atk: 2, tier: 'C', prob: 50 }, { name: '강철 단검', atk: 5, tier: 'B', prob: 30 }, { name: '기사의 장검', atk: 20, tier: 'A', prob: 15 }, { name: '🗡️ 드래곤 슬레이어', atk: 100, tier: 'S', prob: 5 } ];
@@ -243,6 +243,19 @@ function updateUI() {
         
     const stateMessages = { 'SLEEPING': `상태: 침대에서 자는 중 (${gameState.son.actionTimer}초)`, 'EATING': `상태: 식탁에서 밥 먹는 중 (${gameState.son.actionTimer}초)`, 'TRAINING': `상태: 훈련 중 (${gameState.son.actionTimer}초)`, 'STUDYING': `상태: 서재에서 공부 중 (${gameState.son.actionTimer}초)`, 'ADVENTURING': `상태: 외출 중!` };
     els.actionText.innerText = stateMessages[gameState.son.state] || '상태: 아들이 대기 중입니다.';
+        
+        // Update the Son's personal state label
+        if (els.sonStateLabel) {
+            const shortStates = {
+                'SLEEPING': '💤 수면 중...',
+                'EATING': '🍖 식사 중...',
+                'TRAINING': '⚔️ 훈련 중...',
+                'STUDYING': '📚 공부 중...',
+                'ADVENTURING': '🏃‍♂️ 모험 중!',
+                'IDLE': '대기 중'
+            };
+            els.sonStateLabel.innerText = shortStates[gameState.son.state] || '대기 중';
+        }
     
     // Refresh Synthesis UI
     if(typeof updateSynthesisUI !== 'undefined') updateSynthesisUI();
@@ -344,6 +357,12 @@ function sonAI() {
         // Passive stat drain while working
         if (gameState.son.state === 'TRAINING') { gameState.son.hp -= 1; gameState.son.hunger -= 1; }
         if (gameState.son.state === 'STUDYING') { gameState.son.hunger -= 0.5; }
+        
+        // Random chance to talk while doing something
+        if (Math.random() < 0.1 && gameState.son.actionTimer > 3) {
+            const dialogues = sonDialogues[gameState.son.state] || sonDialogues['IDLE'];
+            sonSpeech(dialogues[Math.floor(Math.random() * dialogues.length)]);
+        }
         
         // Action complete
         if (gameState.son.actionTimer <= 0) handleActionCompletion();
