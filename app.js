@@ -763,6 +763,7 @@ function handleActionCompletion() {
 }
 
 function sonAI() {
+  try {
     // 1. Adventuring
     if (gameState.son.state === 'ADVENTURING') {
         if (gameState.son.quest) handleQuestTick();
@@ -831,6 +832,9 @@ function sonAI() {
         }
     }
     updateUI();
+  } catch(e) {
+    console.error("CRASH IN sonAI:", e);
+  }
 }
 
 function checkLevelUp() {
