@@ -121,32 +121,37 @@ function rejectQuest() {
 window.rejectQuest = rejectQuest;
 
 // --- Core UI Update ---
+
 function updateUI() {
-    els.gold.innerText = gameState.parent.gold; els.sonLevel.innerText = `(Lv. ${gameState.son.level})`;
-    els.sonWeapon.innerText = `${gameState.son.weapon.name} (공+${gameState.son.weapon.atk})`; els.sonWeapon.className = `weapon-badge tier-${gameState.son.weapon.tier}`;
-    els.barHp.style.width = `${(gameState.son.hp / gameState.son.maxHp) * 100}%`; els.barHunger.style.width = `${(gameState.son.hunger / gameState.son.maxHunger) * 100}%`; els.barExp.style.width = `${(gameState.son.exp / gameState.son.maxExp) * 100}%`;
-    
-    // Affinity
-    els.affTrust.innerText = gameState.son.affinity.trust;
-    els.affAffection.innerText = gameState.son.affinity.affection;
-    els.affRebellion.innerText = gameState.son.affinity.rebellion;
-    
-    // Quest Alert
-    if (gameState.son.quest) {
-        els.questAlert.style.display = 'block';
-        els.questTimer.innerText = gameState.son.quest.timer;
-        if(els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) els.questModalTimer.innerText = gameState.son.quest.timer;
-    } else {
-        els.questAlert.style.display = 'none';
+    try {
+        els.gold.innerText = gameState.parent.gold; els.sonLevel.innerText = `(Lv. ${gameState.son.level})`;
+        els.sonWeapon.innerText = `${gameState.son.weapon.name} (공+${gameState.son.weapon.atk})`; els.sonWeapon.className = `weapon-badge tier-${gameState.son.weapon.tier}`;
+        els.barHp.style.width = `${(gameState.son.hp / gameState.son.maxHp) * 100}%`; els.barHunger.style.width = `${(gameState.son.hunger / gameState.son.maxHunger) * 100}%`; els.barExp.style.width = `${(gameState.son.exp / gameState.son.maxExp) * 100}%`;
+        
+        // Affinity
+        els.affTrust.innerText = gameState.son.affinity.trust;
+        els.affAffection.innerText = gameState.son.affinity.affection;
+        els.affRebellion.innerText = gameState.son.affinity.rebellion;
+        
+        // Quest Alert
+        if (gameState.son.quest) {
+            els.questAlert.style.display = 'block';
+            els.questTimer.innerText = gameState.son.quest.timer;
+            if(els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) els.questModalTimer.innerText = gameState.son.quest.timer;
+        } else {
+            if(els.questAlert) els.questAlert.style.display = 'none';
+        }
+
+        els.roomTabs.forEach(tab => {
+            if(tab.getAttribute('data-room') === gameState.son.currentRoom && gameState.son.state !== 'ADVENTURING') tab.classList.add('has-son');
+            else tab.classList.remove('has-son');
+        });
+
+        const stateMessages = { 'SLEEPING': `상태: 침대에서 자는 중 (${gameState.son.actionTimer}초)`, 'EATING': `상태: 식탁에서 밥 먹는 중 (${gameState.son.actionTimer}초)`, 'TRAINING': `상태: 훈련 중 (${gameState.son.actionTimer}초)`, 'STUDYING': `상태: 서재에서 공부 중 (${gameState.son.actionTimer}초)`, 'ADVENTURING': `상태: 외출 중!` };
+        els.actionText.innerText = stateMessages[gameState.son.state] || '상태: 아들이 대기 중입니다.';
+    } catch(e) {
+        console.error("CRASH IN updateUI:", e);
     }
-
-    els.roomTabs.forEach(tab => {
-        if(tab.getAttribute('data-room') === gameState.son.currentRoom && gameState.son.state !== 'ADVENTURING') tab.classList.add('has-son');
-        else tab.classList.remove('has-son');
-    });
-
-    const stateMessages = { 'SLEEPING': `상태: 침대에서 자는 중 (${gameState.son.actionTimer}초)`, 'EATING': `상태: 식탁에서 밥 먹는 중 (${gameState.son.actionTimer}초)`, 'TRAINING': `상태: 훈련 중 (${gameState.son.actionTimer}초)`, 'STUDYING': `상태: 서재에서 공부 중 (${gameState.son.actionTimer}초)`, 'ADVENTURING': `상태: 외출 중!` };
-    els.actionText.innerText = stateMessages[gameState.son.state] || '상태: 아들이 대기 중입니다.';
 }
 
 function moveToRoom(roomId) { if (gameState.son.currentRoom !== roomId) { gameState.son.currentRoom = roomId; els.roomViews[roomId].appendChild(els.sprite); updateUI(); } }
@@ -160,19 +165,31 @@ function addMail(title, text, isGold = false, photoData = null) {
 }
 
 // --- Dynamic Adventure ---
+
 function startAdventure() {
-    gameState.son.state = 'ADVENTURING'; els.sprite.style.display = 'none';
-    const cp = gameState.son.level * gameState.son.weapon.atk; addMail("🏃‍♂️ 외출", `아들이 모험을 떠났습니다!`); updateUI();
+    console.log("startAdventure called!");
+    gameState.son.state = 'ADVENTURING'; 
+    if(els.sprite) els.sprite.style.display = 'none';
+    else console.error("els.sprite not found!");
+    
+    const cp = gameState.son.level * gameState.son.weapon.atk; 
+    addMail("🏃‍♂️ 외출", `아들이 모험을 떠났습니다!`); 
+    updateUI();
+    
     let ticks = 0;
     const advInt = setInterval(() => {
         ticks++;
+        console.log("Adventure tick:", ticks);
         if(ticks === 15) addMail("📸 숲속에서", "안전하게 도착!", false, { caption: "평화로운 출발", seed: "forest," + Math.random() });
         else if(ticks === 35) addMail("⚔️ 전투 발생!", "몬스터 등장!", false, { caption: "싸우자!", seed: "monster," + Math.random() });
         else if(ticks === 60) {
             clearInterval(advInt); const earnedGold = (cp * 10) + Math.floor(Math.random() * 500);
             gameState.son.hp = 20; gameState.son.hunger = 20; gameState.parent.gold += earnedGold;
-            gameState.son.state = 'IDLE'; els.sprite.style.display = 'block'; gameState.son.actionTimer = 0;
-            addMail("🏆 귀환 완료!", `<b>보상: +${earnedGold} 골드</b>`, true); updateUI();
+            gameState.son.state = 'IDLE'; 
+            if(els.sprite) els.sprite.style.display = 'block'; 
+            gameState.son.actionTimer = 0;
+            addMail("🏆 귀환 완료!", `<b>보상: +${earnedGold} 골드</b>`, true); 
+            updateUI();
         }
     }, 1000);
 }
