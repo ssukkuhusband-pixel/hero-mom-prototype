@@ -1,8 +1,19 @@
 // --- Game State ---
 const gameState = {
     parent: { gold: 1500, upgrades: { bed: 1, table: 1, dummy: 1 },
+        
         inventory: {
             'steak': { name: '🥩 최고급 스테이크', count: 0, type: 'kitchen' },
+            'book_hero': { name: '📘 영웅학 개론', count: 0, type: 'study' },
+            'sandbag': { name: '🏋️ 모래주머니', count: 0, type: 'training' }
+        },
+        weaponInventory: {
+            'C': { name: '낡은 목검', atk: 2, count: 1 }, // Start with 1 extra C
+            'B': { name: '강철 단검', atk: 5, count: 0 },
+            'A': { name: '기사의 장검', atk: 20, count: 0 },
+            'S': { name: '🗡️ 드래곤 슬레이어', atk: 100, count: 0 }
+        }
+
             'book_hero': { name: '📘 영웅학 개론', count: 0, type: 'study' },
             'sandbag': { name: '🏋️ 모래주머니', count: 0, type: 'training' }
         }
@@ -23,8 +34,11 @@ const els = {
     affTrust: document.getElementById('aff-trust'), affAffection: document.getElementById('aff-affection'), affRebellion: document.getElementById('aff-rebellion'),
     sprite: document.getElementById('son-sprite'), speech: document.getElementById('son-speech'),
     roomTabs: document.querySelectorAll('.room-tab'), roomViews: { 'room-bed': document.getElementById('view-room-bed'), 'room-desk': document.getElementById('view-room-desk'), 'room-table': document.getElementById('view-room-table'), 'room-dummy': document.getElementById('view-room-dummy') },
-    slots: { 'room-table': document.getElementById('slot-kitchen'), 'room-desk': document.getElementById('slot-study'), 'room-dummy': document.getElementById('slot-training') },
+    
+    slots: { 'room-table': document.getElementById('slot-kitchen'), 'room-desk': document.getElementById('slot-study'), 'room-dummy': document.getElementById('slot-training'), 'room-bed': document.getElementById('slot-wardrobe') },
     invModal: document.getElementById('inv-modal'), invList: document.getElementById('inv-list'),
+    weaponInventoryList: document.getElementById('weapon-inventory-list'),
+
     sysTabs: document.querySelectorAll('.sys-tab'), sysContents: document.querySelectorAll('.sys-content'),
     btnWork: document.getElementById('btn-work'), btnGacha: document.getElementById('btn-gacha'), gachaResult: document.getElementById('gacha-result'), mailList: document.querySelector('.mail-list'),
     questAlert: document.getElementById('quest-alert'), questTimer: document.getElementById('quest-timer'),
@@ -40,7 +54,86 @@ els.sysTabs.forEach(tab => { tab.addEventListener('click', () => { els.sysTabs.f
 // --- Inventory ---
 let currentTargetRoom = null;
 function buyItem(itemId, cost) { if (gameState.parent.gold >= cost) { gameState.parent.gold -= cost; gameState.parent.inventory[itemId].count++; updateUI(); alert(`${gameState.parent.inventory[itemId].name} 구매 완료!`); } else alert("골드가 부족합니다!"); } window.buyItem = buyItem;
-function openInventory(roomType) { currentTargetRoom = roomType === 'kitchen' ? 'room-table' : roomType === 'study' ? 'room-desk' : 'room-dummy'; els.invList.innerHTML = ''; let hasItems = false; Object.keys(gameState.parent.inventory).forEach(key => { const item = gameState.parent.inventory[key]; if (item.type === roomType && item.count > 0) { hasItems = true; const btn = document.createElement('button'); btn.className = 'item-btn'; btn.innerText = `${item.name} (보유: ${item.count})`; btn.onclick = () => placeItem(key); els.invList.appendChild(btn); } }); if(!hasItems) els.invList.innerHTML = '<p style="color:#ef4444; font-weight:bold;">배치할 수 있는 아이템이 없습니다.</p>'; els.invModal.style.display = 'flex'; } window.openInventory = openInventory;
+
+function openInventory(roomType) { 
+    currentTargetRoom = roomType === 'kitchen' ? 'room-table' : roomType === 'study' ? 'room-desk' : roomType === 'training' ? 'room-dummy' : 'room-bed'; 
+    els.invList.innerHTML = ''; 
+    let hasItems = false; 
+    
+    if (roomType === 'weapon') {
+        // Render Weapon Inventory for Wardrobe
+        Object.keys(gameState.parent.weaponInventory).forEach(tier => {
+            const item = gameState.parent.weaponInventory[tier];
+            if (item.count > 0) {
+                hasItems = true; 
+                const btn = document.createElement('button'); btn.className = 'item-btn'; 
+                btn.innerText = `[${tier}급] ${item.name} (보유: ${item.count})`; 
+                btn.onclick = () => equipWeapon(tier); 
+                els.invList.appendChild(btn);
+            }
+        });
+    } else {
+        // Normal Items
+        Object.keys(gameState.parent.inventory).forEach(key => { 
+            const item = gameState.parent.inventory[key]; 
+            if (item.type === roomType && item.count > 0) { 
+                hasItems = true; const btn = document.createElement('button'); btn.className = 'item-btn'; 
+                btn.innerText = `${item.name} (보유: ${item.count})`; btn.onclick = () => placeItem(key); els.invList.appendChild(btn); 
+            } 
+        }); 
+    }
+    if(!hasItems) els.invList.innerHTML = '<p style="color:#ef4444; font-weight:bold;">배치할 수 있는 아이템이 없습니다.</p>'; els.invModal.style.display = 'flex'; 
+}
+
+function equipWeapon(tier) {
+    if(gameState.parent.weaponInventory[tier].count > 0) {
+        gameState.parent.weaponInventory[tier].count--;
+        
+        // Return current equipped weapon back to inventory
+        const currentTier = gameState.son.weapon.tier;
+        gameState.parent.weaponInventory[currentTier].count++;
+        
+        // Equip new weapon (Son grabs it from wardrobe)
+        gameState.son.weapon = { name: gameState.parent.weaponInventory[tier].name, atk: gameState.parent.weaponInventory[tier].atk, tier: tier };
+        
+        closeInventory(); updateUI();
+        sonSpeech("우와 새 장비다!!");
+    }
+}
+
+function updateSynthesisUI() {
+    if(!els.weaponInventoryList) return;
+    els.weaponInventoryList.innerHTML = '';
+    
+    Object.keys(gameState.parent.weaponInventory).forEach((tier, index, arr) => {
+        const item = gameState.parent.weaponInventory[tier];
+        const nextTier = arr[index+1];
+        
+        const div = document.createElement('div');
+        div.style.display = 'flex'; div.style.justifyContent = 'space-between'; div.style.alignItems = 'center';
+        div.style.padding = '5px'; div.style.background = 'white'; div.style.borderRadius = '5px';
+        
+        let html = `<span style="font-size:0.85rem">[${tier}] ${item.name}: ${item.count}개</span>`;
+        
+        if(nextTier && item.count >= 3) {
+            html += `<button class="action-btn" style="width:auto; padding:4px 10px; margin:0; font-size:0.75rem; background:#8b5cf6;" onclick="synthesizeWeapon('${tier}', '${nextTier}')">합성 (3개)</button>`;
+        } else if (nextTier) {
+            html += `<span style="font-size:0.7rem; color:#94a3b8">${item.count}/3</span>`;
+        }
+        
+        div.innerHTML = html;
+        els.weaponInventoryList.appendChild(div);
+    });
+}
+window.synthesizeWeapon = function(currentTier, nextTier) {
+    if(gameState.parent.weaponInventory[currentTier].count >= 3) {
+        gameState.parent.weaponInventory[currentTier].count -= 3;
+        gameState.parent.weaponInventory[nextTier].count++;
+        alert(`[${nextTier}급] ${gameState.parent.weaponInventory[nextTier].name} 합성 성공!`);
+        updateUI();
+    }
+}
+
 function closeInventory() { els.invModal.style.display = 'none'; } window.closeInventory = closeInventory;
 function placeItem(itemId) { if(gameState.parent.inventory[itemId].count > 0) { gameState.parent.inventory[itemId].count--; gameState.rooms[currentTargetRoom].placedItem = itemId; const slotEl = els.slots[currentTargetRoom]; slotEl.innerHTML = `<div>${gameState.parent.inventory[itemId].name.split(' ')[0]}</div>`; slotEl.classList.add('filled'); closeInventory(); updateUI(); } }
 
@@ -147,7 +240,13 @@ function updateUI() {
             else tab.classList.remove('has-son');
         });
 
-        const stateMessages = { 'SLEEPING': `상태: 침대에서 자는 중 (${gameState.son.actionTimer}초)`, 'EATING': `상태: 식탁에서 밥 먹는 중 (${gameState.son.actionTimer}초)`, 'TRAINING': `상태: 훈련 중 (${gameState.son.actionTimer}초)`, 'STUDYING': `상태: 서재에서 공부 중 (${gameState.son.actionTimer}초)`, 'ADVENTURING': `상태: 외출 중!` };
+        
+    const stateMessages = { 'SLEEPING': `상태: 침대에서 자는 중 (${gameState.son.actionTimer}초)`, 'EATING': `상태: 식탁에서 밥 먹는 중 (${gameState.son.actionTimer}초)`, 'TRAINING': `상태: 훈련 중 (${gameState.son.actionTimer}초)`, 'STUDYING': `상태: 서재에서 공부 중 (${gameState.son.actionTimer}초)`, 'ADVENTURING': `상태: 외출 중!` };
+    els.actionText.innerText = stateMessages[gameState.son.state] || '상태: 아들이 대기 중입니다.';
+    
+    // Refresh Synthesis UI
+    if(typeof updateSynthesisUI !== 'undefined') updateSynthesisUI();
+
         els.actionText.innerText = stateMessages[gameState.son.state] || '상태: 아들이 대기 중입니다.';
     } catch(e) {
         console.error("CRASH IN updateUI:", e);

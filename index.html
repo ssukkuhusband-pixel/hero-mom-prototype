@@ -48,7 +48,12 @@
 
         <!-- 3. Main Stage (Active Room) -->
         <main class="house-view-container">
-            <div class="room-view active" id="view-room-bed"><div class="furniture bed">🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div></div></div>
+            <div class="room-view active" id="view-room-bed">
+        <div class="furniture bed">🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div></div>
+        <div class="interact-slot" id="slot-wardrobe" onclick="openInventory('weapon')" style="position: absolute; right: 15%; top: 20%;">
+            <span class="slot-label">옷장 (무기)</span>➕
+        </div>
+    </div>
             <div class="room-view" id="view-room-desk"><div class="furniture desk">📚<div class="furn-level">(Lv.<span id="lvl-desk">1</span>)</div><div class="interact-slot" id="slot-study" onclick="openInventory('study')"><span class="slot-label">책꽂이 빈칸</span>➕</div></div></div>
             <div class="room-view" id="view-room-table"><div class="furniture table">🍽️<div class="furn-level">(Lv.<span id="lvl-table">1</span>)</div><div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')"><span class="slot-label">식탁 위 빈접시</span>➕</div></div></div>
             <div class="room-view" id="view-room-dummy"><div class="furniture dummy">🤺<div class="furn-level">(Lv.<span id="lvl-dummy">1</span>)</div><div class="interact-slot" id="slot-training" onclick="openInventory('training')"><span class="slot-label">훈련 도구 슬롯</span>➕</div></div></div>
@@ -80,10 +85,18 @@
                 </div>
             </div>
             <div class="sys-content" id="sys-smith">
-                <h3>대장간 (장비 가챠)</h3>
-                <button class="action-btn" id="btn-gacha" style="background-color: #0f172a;">🗡️ 무기 뽑기 (1,000G)</button>
-                <div id="gacha-result" class="gacha-result"></div>
+        <h3>대장간 (장비 가챠 & 합성)</h3>
+        <p style="font-size:0.85rem; margin-bottom:10px;">가챠로 뽑은 무기는 인벤토리에 보관되며, 같은 등급 3개를 모아 상위 등급으로 합성할 수 있습니다.</p>
+        <button class="action-btn" id="btn-gacha" style="background-color: #0f172a; margin-top:0;">🗡️ 무기 뽑기 (1,000G)</button>
+        <div id="gacha-result" class="gacha-result" style="margin-bottom: 15px;"></div>
+        
+        <div id="synthesis-ui" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; margin-top:15px;">
+            <h4 style="font-size:0.9rem; color:#475569; margin-bottom:8px;">무기 인벤토리 & 합성</h4>
+            <div id="weapon-inventory-list" style="display:flex; flex-direction:column; gap:5px;">
+                <!-- Filled dynamically by JS -->
             </div>
+        </div>
+    </div>
             <div class="sys-content" id="sys-mail">
                 <h3>우편함 & 마을 소문</h3>
                 <ul class="mail-list" style="list-style:none;">
