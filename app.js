@@ -391,8 +391,12 @@ function updateUpgradeButtons(roomId) {
 // Quest System
 // ============================================================
 const questDB = [
-    { type: 'money', desc: "엄마, 저 용돈 100골드만 주세요!", timer: 15, reqGold: 100 },
-    { type: 'food', desc: "엄마 배고파요. 뭐 좀 먹을 거 주세요!", timer: 30, reqItem: 'steak' }
+    { type: 'money', desc: "엄마, 저 용돈 100골드만 주세요!", timer: 30, reqGold: 100 },
+    { type: 'money', desc: "엄마! 마을에서 멋진 걸 봤는데 50골드만...", timer: 25, reqGold: 50 },
+    { type: 'food', desc: "엄마 배고파요. 뭐 좀 먹을 거 주세요!", timer: 60, reqItem: 'kitchen' },
+    { type: 'food', desc: "엄마, 맛있는 거 해주세요!", timer: 60, reqItem: 'kitchen' },
+    { type: 'equipment', desc: "엄마, 더 좋은 무기 없어요?", timer: 45, reqItem: 'weapon' },
+    { type: 'attention', desc: "엄마, 나 좀 봐주세요!", timer: 20, reqItem: 'none' }
 ];
 
 function triggerRandomQuest() {
@@ -420,23 +424,140 @@ function handleQuestTick() {
 function openQuestModal() {
     const q = gameState.son.quest;
     if (!q) return;
-    els.questDesc.innerText = q.desc;
-    els.btnQuestAccept.onclick = acceptQuest;
+    els.questDesc.innerText = `"${q.desc}"`;
+
+    // Build dynamic action buttons based on quest type
+    const actionsEl = document.getElementById('quest-actions');
+    actionsEl.innerHTML = '';
+
+    // Check if we can fulfill right now
+    const canFulfill = checkQuestFulfillable(q);
+
+    if (canFulfill.possible) {
+        // "바로 들어주기" button
+        const btnNow = document.createElement('button');
+        btnNow.className = 'action-btn';
+        btnNow.style.cssText = 'background:#3b82f6; margin-top:0;';
+        btnNow.innerText = `✅ ${canFulfill.label}`;
+        btnNow.onclick = () => acceptQuest();
+        actionsEl.appendChild(btnNow);
+    }
+
+    // "준비할게!" button — buy time (only if not already extended & quest allows)
+    if (!q.extended && q.type !== 'attention') {
+        const btnPrepare = document.createElement('button');
+        btnPrepare.className = 'action-btn';
+        btnPrepare.style.cssText = 'background:#f59e0b; color:#1e293b; margin-top:0;';
+        btnPrepare.innerText = `⏳ 잠깐만! 엄마가 준비할게 (+${getExtendTime(q)}초)`;
+        btnPrepare.onclick = () => extendQuest();
+        actionsEl.appendChild(btnPrepare);
+
+        // Show hint about what's needed
+        const hint = document.createElement('p');
+        hint.style.cssText = 'font-size:0.75rem; color:#64748b; margin-top:5px; text-align:left;';
+        hint.innerHTML = getQuestHint(q);
+        actionsEl.appendChild(hint);
+    }
+
+    if (!canFulfill.possible && q.type === 'attention') {
+        // Attention quest — just click to fulfill
+        const btnAttention = document.createElement('button');
+        btnAttention.className = 'action-btn';
+        btnAttention.style.cssText = 'background:#ec4899; margin-top:0;';
+        btnAttention.innerText = '🤗 안아주기';
+        btnAttention.onclick = () => acceptQuest();
+        actionsEl.appendChild(btnAttention);
+    }
+
+    // "거절" button
+    const btnReject = document.createElement('button');
+    btnReject.className = 'action-btn';
+    btnReject.style.cssText = 'background:#94a3b8; margin-top:0;';
+    btnReject.innerText = '거절하기 (반항심 증가)';
+    btnReject.onclick = () => rejectQuest();
+    actionsEl.appendChild(btnReject);
+
     els.questModal.style.display = 'flex';
 }
 window.openQuestModal = openQuestModal;
 
 function closeQuestModal() { els.questModal.style.display = 'none'; }
 
+// --- Quest helpers ---
+function checkQuestFulfillable(q) {
+    if (q.type === 'money') {
+        if (gameState.parent.gold >= q.reqGold) {
+            return { possible: true, label: `들어주기 (${q.reqGold}G)` };
+        }
+    } else if (q.type === 'food') {
+        const kitchenItems = Object.keys(gameState.parent.inventory).filter(k =>
+            gameState.parent.inventory[k].type === 'kitchen' && gameState.parent.inventory[k].count > 0
+        );
+        if (kitchenItems.length > 0) {
+            return { possible: true, label: `${gameState.parent.inventory[kitchenItems[0]].name} 주기` };
+        }
+        if (gameState.rooms['room-table'].placedItem) {
+            return { possible: true, label: '식탁 위 음식 주기' };
+        }
+    } else if (q.type === 'equipment') {
+        // Check if we have a weapon better than current
+        const tiers = ['C', 'B', 'A', 'S'];
+        const currentIdx = tiers.indexOf(gameState.son.weapon.tier);
+        for (let i = currentIdx + 1; i < tiers.length; i++) {
+            if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
+                return { possible: true, label: `${gameState.parent.weaponInventory[tiers[i]].name} 장착해주기` };
+            }
+        }
+    } else if (q.type === 'attention') {
+        return { possible: false }; // handled separately
+    }
+    return { possible: false };
+}
+
+function getExtendTime(q) {
+    if (q.type === 'food') return 60;
+    if (q.type === 'equipment') return 45;
+    if (q.type === 'money') return 30;
+    return 30;
+}
+
+function getQuestHint(q) {
+    if (q.type === 'food') {
+        return '💡 <b>힌트:</b> 상점에서 스테이크를 사거나, 농사로 재료를 모아 요리하세요!';
+    } else if (q.type === 'equipment') {
+        return '💡 <b>힌트:</b> 대장간에서 무기를 뽑거나 합성하세요!';
+    } else if (q.type === 'money') {
+        return `💡 <b>힌트:</b> 바느질로 ${q.reqGold}G를 모으세요!`;
+    }
+    return '';
+}
+
+function extendQuest() {
+    const q = gameState.son.quest;
+    if (!q || q.extended) return;
+    q.extended = true;
+    const bonus = getExtendTime(q);
+    q.timer += bonus;
+    sonSpeech("알겠어요.. 빨리요 엄마!");
+    showToast(`⏳ 아들이 기다려줍니다! +${bonus}초`, 'info');
+    gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2); // slight trust cost
+    closeQuestModal();
+    updateUI();
+}
+
 function acceptQuest() {
     const q = gameState.son.quest;
+    if (!q) return;
     let success = false;
+    let bonusAffection = 10;
+
     if (q.type === 'money' && gameState.parent.gold >= q.reqGold) {
         gameState.parent.gold -= q.reqGold;
         success = true;
     } else if (q.type === 'food') {
-        // Check inventory for any kitchen item
-        const kitchenItems = Object.keys(gameState.parent.inventory).filter(k => gameState.parent.inventory[k].type === 'kitchen' && gameState.parent.inventory[k].count > 0);
+        const kitchenItems = Object.keys(gameState.parent.inventory).filter(k =>
+            gameState.parent.inventory[k].type === 'kitchen' && gameState.parent.inventory[k].count > 0
+        );
         if (kitchenItems.length > 0) {
             gameState.parent.inventory[kitchenItems[0]].count--;
             success = true;
@@ -446,10 +567,32 @@ function acceptQuest() {
             els.slots['room-table'].classList.remove('filled');
             success = true;
         }
+    } else if (q.type === 'equipment') {
+        const tiers = ['C', 'B', 'A', 'S'];
+        const currentIdx = tiers.indexOf(gameState.son.weapon.tier);
+        for (let i = currentIdx + 1; i < tiers.length; i++) {
+            if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
+                gameState.parent.weaponInventory[tiers[i]].count--;
+                const oldTier = gameState.son.weapon.tier;
+                gameState.parent.weaponInventory[oldTier].count++;
+                gameState.son.weapon = {
+                    name: gameState.parent.weaponInventory[tiers[i]].name,
+                    atk: gameState.parent.weaponInventory[tiers[i]].atk,
+                    tier: tiers[i]
+                };
+                bonusAffection = 15;
+                success = true;
+                break;
+            }
+        }
+    } else if (q.type === 'attention') {
+        success = true;
+        bonusAffection = 5;
     }
+
     if (success) {
         sonSpeech("우와! 엄마 최고 사랑해요!!");
-        gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 10);
+        gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + bonusAffection);
         gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 5);
         gameState.son.affinity.rebellion = Math.max(0, gameState.son.affinity.rebellion - 10);
         showToast("아들의 부탁을 들어줬습니다! ❤️", 'success');
@@ -457,7 +600,7 @@ function acceptQuest() {
         gameState.son.quest = null;
         updateUI();
     } else {
-        showToast("조건을 만족하지 못했습니다!", 'error');
+        showToast("아직 조건을 만족하지 못했습니다! 준비할 시간을 벌어보세요.", 'warning');
     }
 }
 
@@ -493,6 +636,10 @@ function updateUI() {
         if (gameState.son.quest) {
             els.questAlert.style.display = 'block';
             els.questTimer.innerText = gameState.son.quest.timer;
+            // Update banner text to show quest type
+            const q = gameState.son.quest;
+            const questIcons = { money: '💰', food: '🍖', equipment: '⚔️', attention: '🤗' };
+            els.questAlert.innerHTML = `${questIcons[q.type] || '❗'} 아들의 부탁이 있습니다! (남은 시간: <span id="quest-timer">${q.timer}</span>초)${q.extended ? ' <span style="font-size:0.75rem;">⏳연장됨</span>' : ''}`;
             if (els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) {
                 els.questModalTimer.innerText = gameState.son.quest.timer;
             }
