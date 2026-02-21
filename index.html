@@ -64,12 +64,28 @@
                 <div class="son-emoji">👦🏻</div>
                 <div class="son-state-label" id="son-state-label">대기 중...</div>
             </div>
+
+            <!-- Adventure Live View (shown when son is adventuring) -->
+            <div class="adventure-view" id="adventure-view">
+                <div class="adventure-scene-emoji" id="adv-scene-emoji">🌲</div>
+                <div class="adventure-scene-text" id="adv-scene-text">아들이 모험을 떠났습니다...</div>
+                <div class="adventure-scene-sub" id="adv-scene-sub">숲으로 향하는 중</div>
+                <div class="adventure-progress-bar"><div class="adventure-progress-fill" id="adv-progress" style="width:0%"></div></div>
+                <button class="encourage-btn" id="btn-encourage" onclick="encourageSon()">💌 응원 편지 보내기</button>
+            </div>
+
+            <!-- Upgrade Buttons (positioned in each room) -->
+            <button class="upgrade-btn" id="upgrade-bed" onclick="upgradeFurniture('bed')" style="display:none;">⬆️ 침대 업그레이드</button>
+            <button class="upgrade-btn" id="upgrade-desk" onclick="upgradeFurniture('desk')" style="display:none;">⬆️ 서재 업그레이드</button>
+            <button class="upgrade-btn" id="upgrade-table" onclick="upgradeFurniture('table')" style="display:none;">⬆️ 주방 업그레이드</button>
+            <button class="upgrade-btn" id="upgrade-dummy" onclick="upgradeFurniture('dummy')" style="display:none;">⬆️ 훈련장 업그레이드</button>
         </main>
 
         <!-- 4. Bottom Control Panel -->
         <section class="control-panel">
             <nav class="sys-tabs">
                 <button class="sys-tab active" data-sys="sys-work">🪡 부업</button>
+                <button class="sys-tab" data-sys="sys-farm">🌱 농사</button>
                 <button class="sys-tab" data-sys="sys-shop">🛒 상점</button>
                 <button class="sys-tab" data-sys="sys-smith">🔨 대장간</button>
                 <button class="sys-tab" data-sys="sys-mail">✉️ 모험</button>
@@ -78,6 +94,17 @@
                 <h3 style="margin-bottom:5px;">집안일 (부업)</h3>
                 <p style="font-size:0.85rem; margin-bottom:10px;">아들 몰래 인형 눈알을 붙여 용돈을 법니다.</p>
                 <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.2rem;">🪡 바느질 하기 (+10 골드)</button>
+            </div>
+            <div class="sys-content" id="sys-farm">
+                <h3 style="margin-bottom:5px;">🌱 텃밭 (농사)</h3>
+                <p style="font-size:0.85rem; margin-bottom:10px;">씨앗을 심고 수확해서 요리 재료를 얻으세요.</p>
+                <div class="farm-grid" id="farm-grid">
+                    <!-- 3 farm plots, filled by JS -->
+                </div>
+                <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+                    <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🍳 요리하기</h4>
+                    <div id="cook-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                </div>
             </div>
             <div class="sys-content" id="sys-shop">
                 <h3 style="margin-bottom:5px;">상점 (아이템 구매)</h3>
@@ -133,6 +160,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:6px; pointer-events:none; width:90%; max-width:400px;"></div>
 
     <script src="app.js"></script>
 </body>
