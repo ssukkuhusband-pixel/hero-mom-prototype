@@ -4695,7 +4695,7 @@ function getCraftBottleneckHint(tabKey) {
             if (!def) continue;
             if (isBossSealCrafted(zid)) continue;
             const deficits = getNeedDeficits(def.needs);
-            return { title: `추천: ${def.name}`, sub: formatDeficitParts(deficits, 3) };
+            return { title: `추천: ${def.name}`, sub: formatDeficitParts(deficits, 3), missing: deficits.slice(0, 3) };
         }
         return { title: '추천: 보스 인장', sub: '이미 제작을 많이 완료했어요.' };
     }
@@ -4705,7 +4705,7 @@ function getCraftBottleneckHint(tabKey) {
             const w = gameState.parent.specialWeaponInventory?.[m.id];
             if ((w?.count || 0) > 0) continue;
             const deficits = getNeedDeficits(m.needs);
-            return { title: `다음 무기: ${m.name}`, sub: formatDeficitParts(deficits, 3) };
+            return { title: `다음 무기: ${m.name}`, sub: formatDeficitParts(deficits, 3), missing: deficits.slice(0, 3) };
         }
         return { title: '다음 무기', sub: '마일스톤 무기를 모두 제작했어요.' };
     }
@@ -4726,7 +4726,7 @@ function getCraftBottleneckHint(tabKey) {
             return `${name} ${d.have}/${d.need}`;
         }).join(' · ')
         : '병목 없음';
-    return { title: `다음 장비: T${nextTier} · ${r.name}`, sub };
+    return { title: `다음 장비: T${nextTier} · ${r.name}`, sub, missing: deficits.slice(0, 3) };
 }
 
 function updateCraftUI() {
@@ -4768,6 +4768,15 @@ function updateCraftUI() {
 
     const hint = getCraftBottleneckHint(tab);
     const toggleLabel = onlyCraftable ? '✅ 가능만: ON' : '✅ 가능만: OFF';
+    const missing = Array.isArray(hint?.missing) ? hint.missing.filter(x => x && x.key && !String(x.key).startsWith('prev:')) : [];
+    const requestBtns = missing.length
+        ? missing.slice(0, 3).map(d => {
+            ensureLootKey(d.key);
+            const nm = gameState.parent.loot[d.key]?.name || d.key;
+            const emoji = String(nm).split(' ')[0] || '📦';
+            return `<button class="mini-btn secondary" type="button" style="padding:7px 10px;" onclick="requestMaterialFromCraft('${d.key}')">💬 ${emoji} 부탁</button>`;
+        }).join('')
+        : `<span style="font-size:0.75rem; color:#94a3b8;">부족 재료가 없거나, 지금은 부탁할 게 없어요.</span>`;
     html += `
       <div class="hint-card" style="margin-top:10px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
@@ -4780,6 +4789,10 @@ function updateCraftUI() {
         <div style="margin-top:10px; font-size:0.78rem; color:#475569;">
           <div style="font-weight:1000; color:#0f172a;">${hint.title}</div>
           <div style="margin-top:4px; color:#64748b;">${hint.sub}</div>
+          <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:0.75rem; color:#64748b; font-weight:900;">부족 재료 빠른 부탁:</span>
+            ${requestBtns}
+          </div>
         </div>
       </div>
     `;
@@ -6806,6 +6819,12 @@ function setMaterialRequest(key) {
     updateUI();
 }
 window.setMaterialRequest = setMaterialRequest;
+
+function requestMaterialFromCraft(key) {
+    // Convenience: used from smithy craft summary “병목 → 부탁” buttons.
+    setMaterialRequest(key);
+}
+window.requestMaterialFromCraft = requestMaterialFromCraft;
 
 function clearMaterialRequest() {
     ensureMaterialRequestState();
