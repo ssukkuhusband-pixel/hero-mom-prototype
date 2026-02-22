@@ -99,6 +99,7 @@ const DEFAULT_GAME_STATE = {
 		        mailUnread: 0,
 		        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
 		        uiBadges: { world: 0, network: 0 }, // unseen updates for Son tab
+		        demo: { active: true, startedTick: 0, forcedDepart: false, craftHinted: false, introShown: false }, // 10-min demo pacing
 		        supportPin: null, // { type, ... }
 		        uiLocks: { wardrobe: false },
 	        shop: { uiTab: 'grocery' },
@@ -261,6 +262,7 @@ function loadGame() {
         ensureBossSealState();
         ensureSonUiState();
         ensureUiBadgeState();
+        ensureDemoState();
         ensureSupportPinState();
         ensureMaterialRequestState();
         ensureSonBehaviorState();
@@ -644,6 +646,108 @@ function ensureUiBadgeState() {
     if (!Number.isFinite(b.network)) b.network = 0;
     b.world = clampInt(b.world, 0, 99);
     b.network = clampInt(b.network, 0, 99);
+}
+
+function ensureDemoState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!gameState.parent.demo || typeof gameState.parent.demo !== 'object') {
+        // Enable only for early-game saves to avoid bothering ongoing playthroughs.
+        gameState.parent.demo = {
+            active: !gameState.firstAdventureDone,
+            startedTick: Math.floor(gameState.worldTick || 0),
+            forcedDepart: false,
+            craftHinted: false,
+            introShown: false,
+            mailHinted: false
+        };
+        return;
+    }
+    const d = gameState.parent.demo;
+    if (typeof d.active !== 'boolean') d.active = !gameState.firstAdventureDone;
+    if (!Number.isFinite(d.startedTick)) d.startedTick = Math.floor(gameState.worldTick || 0);
+    if (typeof d.forcedDepart !== 'boolean') d.forcedDepart = false;
+    if (typeof d.craftHinted !== 'boolean') d.craftHinted = false;
+    if (typeof d.introShown !== 'boolean') d.introShown = false;
+    if (typeof d.mailHinted !== 'boolean') d.mailHinted = false;
+    // Auto-disable once the “10-min loop” is naturally reached.
+    if (gameState.firstAdventureDone && d.craftHinted) d.active = false;
+}
+
+function isDemoActive() {
+    ensureDemoState();
+    const d = gameState.parent.demo;
+    if (!d.active) return false;
+    const now = Math.floor(gameState.worldTick || 0);
+    const elapsed = Math.max(0, now - Math.floor(d.startedTick || 0));
+    return elapsed <= 600; // 10 minutes
+}
+
+function getDemoAdventureReadyPct() {
+    // Slightly easier threshold until the first adventure starts,
+    // so the “leave → letter → return → craft” loop shows within 10 minutes.
+    if (!isDemoActive()) return 0.8;
+    if (gameState.firstAdventureDone) return 0.8;
+    return 0.65;
+}
+
+function demoDirectorTick() {
+    if (!isDemoActive()) return;
+    const d = gameState.parent.demo;
+    const now = Math.floor(gameState.worldTick || 0);
+    const elapsed = Math.max(0, now - Math.floor(d.startedTick || 0));
+
+    if (!d.introShown) {
+        d.introShown = true;
+        showToast("🎬 10분 데모: 첫 모험→편지→귀환→제작까지 한 번 맛보게 해줄게요.", 'info');
+        saveGame();
+    }
+
+    // If the player doesn't do much, nudge a departure so the loop actually happens.
+    if (!gameState.firstAdventureDone && gameState.son.state !== 'ADVENTURING') {
+        if (!d.forcedDepart && elapsed >= 45) {
+            ensureSonBehaviorState();
+            gameState.son.homeActionCount = Math.max(gameState.son.homeActionCount || 0, 10);
+            d.forcedDepart = true;
+            showToast("🏃‍♂️ 아들이 준비되면 모험을 떠날 거예요. (HP/허기만 조금 채우면 돼요)", 'info');
+            saveGame();
+        }
+        return;
+    }
+
+    if (gameState.son.state === 'ADVENTURING' && !d.mailHinted && elapsed >= 60) {
+        d.mailHinted = true;
+        showToast("📮 모험 중에 가끔 편지가 와요. 우편함을 확인해보세요.", 'info');
+        saveGame();
+    }
+
+    if (gameState.firstAdventureDone && !d.craftHinted) {
+        d.craftHinted = true;
+        // Help the player see “가능한 것부터”.
+        ensureSmithy();
+        gameState.parent.smithy.craftOnlyCraftable = true;
+        showToast("🔨 귀환 보상으로 제작이 열렸을 수도 있어요. 대장간→제작에서 확인해봐요!", 'info');
+        saveGame();
+    }
+}
+
+function demoEnsureFirstCraftOpportunity(lootResults) {
+    // If the first adventure comes back “empty” for crafting, top up a tiny amount
+    // so the player can experience 1 craft within the 10-min demo loop.
+    if (!isDemoActive()) return;
+    if (gameState.firstAdventureDone) return;
+    const list = Array.isArray(lootResults) ? lootResults : null;
+    const r = buildGearRecipe('helmet', 1);
+    const deficits = getNeedDeficits(r.needs);
+    if (!deficits.length) return;
+    const gained = [];
+    for (const d of deficits) {
+        ensureLootKey(d.key);
+        gameState.parent.loot[d.key].count += d.missing;
+        gained.push(`${gameState.parent.loot[d.key].name} x${d.missing}`);
+    }
+    if (list && gained.length) {
+        list.push(`🧺 챙김: ${gained.join(', ')}`);
+    }
 }
 
 function noteSonUiUpdate(kind, amount = 1) {
@@ -6468,6 +6572,7 @@ function addMail(title, text, isGold = false) {
     const mailboxOpen = !!(els.mailboxModal && els.mailboxModal.style.display === 'flex');
     if (!mailboxOpen) {
         gameState.parent.mailUnread = Math.max(0, (gameState.parent.mailUnread || 0) + 1);
+        showToast("📮 편지가 도착했어요!", 'info');
     }
     renderMailbox();
     updateUI();
@@ -7232,12 +7337,13 @@ function startAdventure() {
     const diffKey = plan.diffKey;
     const diff = plan.diff;
     const totalTicks = diff.duration[0] + Math.floor(Math.random() * (diff.duration[1] - diff.duration[0] + 1));
+    const demoTotalTicks = (!gameState.firstAdventureDone && isDemoActive()) ? Math.min(totalTicks, 150) : totalTicks;
     const appliedBuff = gameState.son.nextAdventureBuff ? normalizeNextAdventureBuff(gameState.son.nextAdventureBuff) : null;
     if (appliedBuff) gameState.son.nextAdventureBuff = null;
 
     gameState.son.adventure = {
         ticks: 0,
-        totalTicks,
+        totalTicks: demoTotalTicks,
         baseCp,
         difficulty: diffKey,
         zoneId: plan.zone.id,
@@ -8107,6 +8213,9 @@ function completeAdventure() {
         }
     }
 
+    // 10-min demo: ensure at least one craft is possible after the first return.
+    demoEnsureFirstCraftOpportunity(lootResults);
+
     // Parent's request: the son may remember and bring a bit extra (based on affinity).
     const reqBonus = tryGrantRequestedMaterialBonus(zone, mission, diffKey, outcome);
     if (reqBonus) lootResults.push(reqBonus.text);
@@ -8513,8 +8622,9 @@ function sonAI() {
     // Rule: after enough routines at home, the son will prepare and 반드시 모험을 떠납니다 (when ready).
     ensureSonBehaviorState();
     const forcedByActions = (gameState.son.homeActionCount || 0) >= 10;
-    const hpReady = gameState.son.hp >= (gameState.son.maxHp * 0.8);
-    const hungerReady = gameState.son.hunger >= (gameState.son.maxHunger * 0.8);
+    const readyPct = getDemoAdventureReadyPct();
+    const hpReady = gameState.son.hp >= (gameState.son.maxHp * readyPct);
+    const hungerReady = gameState.son.hunger >= (gameState.son.maxHunger * readyPct);
 
     if (forcedByActions) {
         if (hpReady && hungerReady && !isWardrobeLocked()) {
@@ -8939,6 +9049,7 @@ setInterval(() => {
     gameState.worldTick = Math.max(0, Math.floor((gameState.worldTick || 0) + 1));
     ensureAdventureInterval();
     updateBookstoreRotation();
+    demoDirectorTick();
     sonAI();
     injuryTick();
     requestsTick();
