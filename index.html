@@ -95,52 +95,68 @@
                     </div>
 
                     <div class="wardrobe-rack">
-                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="weapon" onclick="openWardrobePicker('weapon')">
-                            <div class="ws-icon">🗡️</div>
-                            <div class="ws-title">무기</div>
-                            <div class="ws-name" id="wb-weapon-name">-</div>
-                            <div class="ws-stat" id="wb-weapon-stat"></div>
-                            <div class="ws-actions">
-                                <button class="ws-btn" type="button" onclick="openWardrobePicker('weapon'); event.stopPropagation();">변경</button>
-                                <button class="ws-btn secondary" type="button" onclick="unequipWeapon(); event.stopPropagation();">해제</button>
-                            </div>
+                        <div class="wardrobe-col">
+                            <button class="wardrobe-gear" type="button" data-wslot="weapon" onclick="openWardrobePicker('weapon')">
+                                <div class="wg-icon">
+                                    <span class="emoji-fallback" aria-hidden="true">🗡️</span>
+                                    <img class="wg-img" src="assets/ui/gear_weapon.png" alt="무기 아이콘" loading="lazy">
+                                </div>
+                                <div class="wg-meta">
+                                    <div class="wg-title">무기</div>
+                                    <div class="wg-name" id="wb-weapon-name">-</div>
+                                    <div class="wg-stat" id="wb-weapon-stat"></div>
+                                </div>
+                                <button class="wg-unequip" type="button" title="해제" onclick="unequipWeapon(); event.stopPropagation();">↺</button>
+                            </button>
+
+                            <button class="wardrobe-gear" type="button" data-wslot="helmet" onclick="openWardrobePicker('helmet')">
+                                <div class="wg-icon">
+                                    <span class="emoji-fallback" aria-hidden="true">🪖</span>
+                                    <img class="wg-img" src="assets/ui/gear_helmet.png" alt="투구 아이콘" loading="lazy">
+                                </div>
+                                <div class="wg-meta">
+                                    <div class="wg-title">투구</div>
+                                    <div class="wg-name" id="wb-helmet-name">-</div>
+                                    <div class="wg-stat" id="wb-helmet-stat"></div>
+                                </div>
+                                <button class="wg-unequip" type="button" title="해제" onclick="unequipGear('helmet'); event.stopPropagation();">↺</button>
+                            </button>
                         </div>
-                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="helmet" onclick="openWardrobePicker('helmet')">
-                            <div class="ws-icon">🪖</div>
-                            <div class="ws-title">투구</div>
-                            <div class="ws-name" id="wb-helmet-name">-</div>
-                            <div class="ws-stat" id="wb-helmet-stat"></div>
-                            <div class="ws-actions">
-                                <button class="ws-btn" type="button" onclick="openWardrobePicker('helmet'); event.stopPropagation();">변경</button>
-                                <button class="ws-btn secondary" type="button" onclick="unequipGear('helmet'); event.stopPropagation();">해제</button>
-                            </div>
-                        </div>
+
                         <div class="wardrobe-center">
                             <div class="hanger">🪝</div>
-                            <div style="font-size:0.75rem; color:#94a3b8; font-weight:900;">옷걸이</div>
+                            <div class="wardrobe-center-sub">옷걸이</div>
                         </div>
-                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="armor" onclick="openWardrobePicker('armor')">
-                            <div class="ws-icon">🧥</div>
-                            <div class="ws-title">갑옷</div>
-                            <div class="ws-name" id="wb-armor-name">-</div>
-                            <div class="ws-stat" id="wb-armor-stat"></div>
-                            <div class="ws-actions">
-                                <button class="ws-btn" type="button" onclick="openWardrobePicker('armor'); event.stopPropagation();">변경</button>
-                                <button class="ws-btn secondary" type="button" onclick="unequipGear('armor'); event.stopPropagation();">해제</button>
-                            </div>
-                        </div>
-                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="boots" onclick="openWardrobePicker('boots')">
-                            <div class="ws-icon">👢</div>
-                            <div class="ws-title">신발</div>
-                            <div class="ws-name" id="wb-boots-name">-</div>
-                            <div class="ws-stat" id="wb-boots-stat"></div>
-                            <div class="ws-actions">
-                                <button class="ws-btn" type="button" onclick="openWardrobePicker('boots'); event.stopPropagation();">변경</button>
-                                <button class="ws-btn secondary" type="button" onclick="unequipGear('boots'); event.stopPropagation();">해제</button>
-                            </div>
+
+                        <div class="wardrobe-col">
+                            <button class="wardrobe-gear" type="button" data-wslot="armor" onclick="openWardrobePicker('armor')">
+                                <div class="wg-icon">
+                                    <span class="emoji-fallback" aria-hidden="true">🧥</span>
+                                    <img class="wg-img" src="assets/ui/gear_armor.png" alt="갑옷 아이콘" loading="lazy">
+                                </div>
+                                <div class="wg-meta">
+                                    <div class="wg-title">갑옷</div>
+                                    <div class="wg-name" id="wb-armor-name">-</div>
+                                    <div class="wg-stat" id="wb-armor-stat"></div>
+                                </div>
+                                <button class="wg-unequip" type="button" title="해제" onclick="unequipGear('armor'); event.stopPropagation();">↺</button>
+                            </button>
+
+                            <button class="wardrobe-gear" type="button" data-wslot="boots" onclick="openWardrobePicker('boots')">
+                                <div class="wg-icon">
+                                    <span class="emoji-fallback" aria-hidden="true">👢</span>
+                                    <img class="wg-img" src="assets/ui/gear_boots.png" alt="신발 아이콘" loading="lazy">
+                                </div>
+                                <div class="wg-meta">
+                                    <div class="wg-title">신발</div>
+                                    <div class="wg-name" id="wb-boots-name">-</div>
+                                    <div class="wg-stat" id="wb-boots-stat"></div>
+                                </div>
+                                <button class="wg-unequip" type="button" title="해제" onclick="unequipGear('boots'); event.stopPropagation();">↺</button>
+                            </button>
                         </div>
                     </div>
-	            </div>
+		            </div>
 	            <div class="room-view" id="view-room-desk">
                     <div class="furniture desk">
 	                    <span class="emoji-fallback" aria-hidden="true">📚</span>
