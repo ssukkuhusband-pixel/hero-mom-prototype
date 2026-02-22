@@ -14,13 +14,16 @@
 	                <h2>아들 상태 <span id="son-level" style="font-weight: 500; color: #64748b; font-size: 0.9rem;">(Lv. 1)</span>
 	                    <span id="son-weapon" class="weapon-badge tier-C">몽둥이 (공+1)</span>
 	                </h2>
-			                <div class="parent-resources">
-			                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
-			                    <button class="mailbox-btn" type="button" onclick="openMailbox()" title="우편함">
-			                        <span>📮 우편함</span>
-			                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
-			                    </button>
-			                    <button class="mailbox-btn" type="button" onclick="openBalancePanel()" title="밸런스/디버그">
+				                <div class="parent-resources">
+				                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
+				                    <button class="mailbox-btn" id="btn-bgm" type="button" onclick="toggleBgm()" title="배경음">
+				                        <span>🔊</span>
+				                    </button>
+				                    <button class="mailbox-btn" type="button" onclick="openMailbox()" title="우편함">
+				                        <span>📮 우편함</span>
+				                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
+				                    </button>
+				                    <button class="mailbox-btn" type="button" onclick="openBalancePanel()" title="밸런스/디버그">
 			                        <span>📊 밸런스</span>
 			                    </button>
 			                    <button class="mailbox-btn reset-btn" type="button" onclick="resetGame()" title="데이터 초기화">
@@ -724,6 +727,8 @@
 
     <!-- Toast Container -->
     <div id="toast-container" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:6px; pointer-events:none; width:90%; max-width:400px;"></div>
+
+    <audio id="bgm" src="assets/sound/bgm.mp3" preload="auto" loop></audio>
 
     <script src="app.js"></script>
 </body>

@@ -92,13 +92,14 @@ function deepClone(obj) {
 const SAVE_KEY = 'hero_mom_2_save_v1';
 const DEFAULT_GAME_STATE = {
     worldTick: 0,
-    parent: {
-        gold: 500,
-        smithy: { level: 1, xp: 0 },
-        mailUnread: 0,
-        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
-        supportPin: null, // { type, ... }
-        uiLocks: { wardrobe: false },
+	    parent: {
+	        gold: 500,
+	        audio: { bgmEnabled: true, bgmVolume: 0.22 },
+	        smithy: { level: 1, xp: 0 },
+	        mailUnread: 0,
+	        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
+	        supportPin: null, // { type, ... }
+	        uiLocks: { wardrobe: false },
         shop: { uiTab: 'grocery' },
         work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
         worldCodex: { zones: {} },
@@ -254,6 +255,7 @@ function loadGame() {
         ensureLibraryState();
         ensureFarm();
         ensureWorkState();
+        ensureAudioState();
         ensureWorldCodexState();
         ensureBossSealState();
         ensureSonUiState();
@@ -280,6 +282,109 @@ function resetGame() {
     window.location.reload();
 }
 window.resetGame = resetGame;
+
+function ensureAudioState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!gameState.parent.audio || typeof gameState.parent.audio !== 'object') {
+        gameState.parent.audio = { bgmEnabled: true, bgmVolume: 0.22 };
+    }
+    const a = gameState.parent.audio;
+    if (typeof a.bgmEnabled !== 'boolean') a.bgmEnabled = true;
+    if (!Number.isFinite(a.bgmVolume)) a.bgmVolume = 0.22;
+    a.bgmVolume = Math.max(0, Math.min(1, a.bgmVolume));
+}
+
+// ============================================================
+// BGM (assets/sound/bgm.mp3)
+// NOTE: Most browsers require a user gesture to start audio.
+// ============================================================
+let bgmGestureHooked = false;
+
+function applyBgmButtonUI() {
+    if (!els.btnBgm) return;
+    ensureAudioState();
+    const on = !!gameState.parent.audio.bgmEnabled;
+    els.btnBgm.innerHTML = `<span>${on ? '🔊' : '🔇'}</span>`;
+    els.btnBgm.title = on ? '배경음: 켜짐' : '배경음: 꺼짐';
+}
+
+async function tryPlayBgm() {
+    const audio = els.bgm;
+    if (!audio) return false;
+    ensureAudioState();
+    audio.loop = true;
+    audio.volume = Math.max(0, Math.min(1, gameState.parent.audio.bgmVolume ?? 0.22));
+    try {
+        await audio.play();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function stopBgm() {
+    const audio = els.bgm;
+    if (!audio) return;
+    try { audio.pause(); } catch (e) {}
+}
+
+function setBgmEnabled(enabled) {
+    ensureAudioState();
+    gameState.parent.audio.bgmEnabled = !!enabled;
+    applyBgmButtonUI();
+    if (!els.bgm) return;
+    if (gameState.parent.audio.bgmEnabled) {
+        // Start after a gesture if needed
+        void tryPlayBgm();
+    } else {
+        stopBgm();
+    }
+    saveGame();
+}
+
+function toggleBgm() {
+    ensureAudioState();
+    setBgmEnabled(!gameState.parent.audio.bgmEnabled);
+}
+window.toggleBgm = toggleBgm;
+
+function initBgm() {
+    ensureAudioState();
+    if (!els.btnBgm || !els.bgm) {
+        if (els.btnBgm) els.btnBgm.style.display = 'none';
+        return;
+    }
+    applyBgmButtonUI();
+
+    // Attempt (may fail until user gesture)
+    if (gameState.parent.audio.bgmEnabled) {
+        void tryPlayBgm();
+    }
+
+    if (!bgmGestureHooked) {
+        bgmGestureHooked = true;
+        const unlock = async () => {
+            if (!gameState.parent.audio.bgmEnabled) return;
+            const ok = await tryPlayBgm();
+            if (ok) {
+                document.removeEventListener('pointerdown', unlock, true);
+                document.removeEventListener('keydown', unlock, true);
+            }
+        };
+        document.addEventListener('pointerdown', unlock, true);
+        document.addEventListener('keydown', unlock, true);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        const audio = els.bgm;
+        if (!audio) return;
+        if (document.hidden) {
+            stopBgm();
+        } else if (gameState.parent.audio.bgmEnabled) {
+            void tryPlayBgm();
+        }
+    });
+}
 
 // --- Upgrade Costs & Effects ---
 const upgradeData = {
@@ -1563,6 +1668,8 @@ const els = {
     mailList: document.getElementById('mailbox-list'),
     mailboxModal: document.getElementById('mailbox-modal'),
     mailBadge: document.getElementById('mail-badge'),
+    btnBgm: document.getElementById('btn-bgm'),
+    bgm: document.getElementById('bgm'),
     questAlert: document.getElementById('quest-alert'),
     questTimer: document.getElementById('quest-timer'),
     questModal: document.getElementById('quest-modal'),
@@ -8448,6 +8555,7 @@ if (!loaded) {
     showToast("💾 저장 데이터를 불러왔습니다.", 'success');
 }
 
+initBgm();
 moveToRoom(gameState.son.currentRoom);
 updateUpgradeButtons(getActiveRoom());
 updateUI();
