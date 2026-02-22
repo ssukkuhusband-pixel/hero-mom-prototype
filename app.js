@@ -167,6 +167,7 @@ const DEFAULT_GAME_STATE = {
         injury: null, // { severity, label, remaining, cpMul, riskMul, healMul, hungerDrain }
         plannedGoal: null, // { zoneId, missionId, diffKey, cp }
         requests: [], // [{ id, kind, title, desc, help, createdAt, dueAt, status, data }]
+        objective: null, // { id, type, zoneId, missionId, targetIntel, targetPct, createdTick, tries }
         adventure: null,
         adventureEncouraged: false,
         nextAdventureBuff: null // { id, name, desc, expMul, goldMul, lootMul, riskMul, fatigueAdd, source }
@@ -219,6 +220,7 @@ function loadGame() {
         ensureSupportPinState();
         cleanupLegacyParentSettings();
         ensureRequestState();
+        ensureObjectiveState();
         sanitizeMailboxLog();
         return true;
     } catch (e) {
@@ -2164,6 +2166,156 @@ function renderSupportSuggestionsUI(plan) {
     }).join('');
 }
 
+// ============================================================
+// Objective system (son's current goal that persists)
+// ============================================================
+function newObjectiveId() {
+    return `obj_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+}
+
+function ensureObjectiveState() {
+    if (!gameState.son || typeof gameState.son !== 'object') gameState.son = {};
+    const o = gameState.son.objective;
+    if (!o) return;
+    if (typeof o !== 'object' || !o.id || !o.zoneId || !o.missionId || !o.type) {
+        gameState.son.objective = null;
+        return;
+    }
+}
+
+function getObjectiveProgress(o) {
+    ensureWorldCodexState();
+    const zmap = gameState.parent.worldCodex?.zones || {};
+    const entry = zmap[o.zoneId] || null;
+    const zone = getZoneById(o.zoneId);
+    const mission = getMissionById(o.missionId);
+    const last = entry?.last || null;
+
+    if (o.type === 'boss') {
+        const done = !!entry?.bossDefeated;
+        const lastText = last
+            ? (last.outcome === 'partial' ? `마지막: 부분 ${last.pct}%` : `마지막: ${outcomeLabel(last.outcome)}`)
+            : '마지막: -';
+        return { done, label: `보스 격파`, sub: `${zoneBosses[o.zoneId]?.emoji || '👑'} ${zoneBosses[o.zoneId]?.name || '보스'} · ${lastText}` };
+    }
+    if (o.type === 'intel') {
+        const cur = entry?.intel || 0;
+        const target = clampInt(o.targetIntel || 60, 10, 100);
+        const done = cur >= target;
+        return { done, label: `탐험도 ${cur}/${target}%`, sub: `던전 정보를 모아두면 더 안전해져요.` };
+    }
+    // hunt / success objective
+    const targetPct = clampInt(o.targetPct || 100, 60, 150);
+    const lastPct = (last && last.missionId === o.missionId) ? (last.pct || 0) : 0;
+    const done = (last && last.missionId === o.missionId) && (lastPct >= targetPct);
+    const lastText = (last && last.missionId === o.missionId)
+        ? (last.outcome === 'partial' ? `부분 ${last.pct}%` : outcomeLabel(last.outcome))
+        : '-';
+    return { done, label: `성공 ${lastPct}/${targetPct}%`, sub: `목표 미션: ${mission.emoji} ${mission.name} · 최근: ${lastText}` };
+}
+
+function deriveObjectiveFromPlan(plan) {
+    const zoneId = plan?.zone?.id;
+    const missionId = plan?.mission?.id;
+    if (!zoneId || !missionId) return null;
+    ensureWorldCodexState();
+    const entry = gameState.parent.worldCodex?.zones?.[zoneId];
+    const intelNow = entry?.intel || 0;
+
+    let type = 'hunt';
+    let targetIntel = null;
+    let targetPct = 100;
+    if (missionId === 'boss') type = 'boss';
+    else if (missionId === 'gather') {
+        type = 'intel';
+        targetIntel = clampInt(Math.max(40, intelNow + 25), 10, 100);
+    } else {
+        type = 'hunt';
+        targetPct = 100;
+    }
+
+    return {
+        id: newObjectiveId(),
+        type,
+        zoneId,
+        missionId,
+        targetIntel,
+        targetPct,
+        createdTick: Math.floor(gameState.worldTick || 0),
+        tries: 0
+    };
+}
+
+function ensureObjectiveFromPlan(plan) {
+    ensureObjectiveState();
+    const o = gameState.son.objective;
+    if (o) {
+        const p = getObjectiveProgress(o);
+        if (!p.done) return;
+        gameState.son.objective = null;
+    }
+    const next = deriveObjectiveFromPlan(plan);
+    if (next) gameState.son.objective = next;
+}
+
+function renderObjectiveChecklistHtml(plan, objective) {
+    // Lightweight “support checklist” that makes next actions obvious.
+    const items = [];
+
+    if (gameState.son.injury) {
+        const cost = gameState.son.injury?.hospitalCost || 0;
+        items.push({
+            done: false,
+            title: `🏥 치료 (${cost}G)`,
+            action: `<button class="mini-btn" type="button" onclick="treatInjuryAtHospital()">치료</button>`
+        });
+    }
+
+    const oType = objective?.type || (plan?.mission?.id === 'boss' ? 'boss' : plan?.mission?.id === 'gather' ? 'intel' : 'hunt');
+    if (oType === 'boss' || plan?.diffKey === 'risky') {
+        items.push({
+            done: isSupportPinDone({ type: 'cook', recipeId: 'herb_potion' }),
+            title: `🍵 약초 물약 준비`,
+            action: `<button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-table'); openKitchenCookMenu();">주방</button>`
+        });
+    }
+
+    const armorStep = getNextGearCraftStep('armor');
+    if (armorStep) {
+        items.push({
+            done: isSupportPinDone({ type: 'craftGear', slot: 'armor', tier: armorStep.tier }),
+            title: `🧵 다음 갑옷 T${armorStep.tier} 준비`,
+            action: `<button class="mini-btn secondary" type="button" onclick="setMainView('town'); openTownSection('smith'); setSmithyTab('craft');">대장간</button>`
+        });
+    }
+
+    ensureLibraryState();
+    const shelfHasAny = (gameState.parent.library?.shelf || []).some(Boolean);
+    items.push({
+        done: !!shelfHasAny,
+        title: `📚 책장에 책 두기`,
+        action: `<button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-desk'); openBookshelfManager();">책장</button>`
+    });
+
+    const uniq = [];
+    for (const it of items) {
+        if (uniq.length >= 4) break;
+        uniq.push(it);
+    }
+    return uniq.map(it => {
+        const mark = it.done ? '✅' : '☐';
+        const color = it.done ? '#10b981' : '#0f172a';
+        return `
+          <div class="support-row ${it.done ? 'done' : ''}" style="align-items:center;">
+            <div style="flex:1; min-width:0;">
+              <div class="support-title" style="color:${color};">${mark} ${it.title}</div>
+            </div>
+            <div class="support-actions">${it.action || ''}</div>
+          </div>
+        `;
+    }).join('');
+}
+
 function planAdventureGoal(options = {}) {
     const { refresh = false } = options;
     const cp = getSonCombatPower();
@@ -2173,6 +2325,16 @@ function planAdventureGoal(options = {}) {
     const diffDecision = getAdventureDifficultyDecision();
     const diffKey = diffDecision.diffKey;
     const diff = difficultyData[diffKey] || difficultyData.normal;
+
+    ensureObjectiveState();
+    if (!refresh && gameState.son.objective) {
+        const o = gameState.son.objective;
+        const prog = getObjectiveProgress(o);
+        if (!prog.done) {
+            return { zone: getZoneById(o.zoneId), mission: getMissionById(o.missionId), diffKey, diff, cp, diffDecision, objective: o };
+        }
+        gameState.son.objective = null;
+    }
 
     if (!refresh && gameState.son.plannedGoal && gameState.son.plannedGoal.diffKey === diffKey) {
         const cached = gameState.son.plannedGoal;
@@ -2218,7 +2380,9 @@ function planAdventureGoal(options = {}) {
     const mission = r < wGather ? getMissionById('gather') : r < wGather + wHunt ? getMissionById('hunt') : getMissionById('boss');
 
     gameState.son.plannedGoal = { zoneId: chosen.id, missionId: mission.id, diffKey, cp };
-    return { zone: chosen, mission, diffKey, diff, cp, diffDecision };
+    const plan = { zone: chosen, mission, diffKey, diff, cp, diffDecision };
+    ensureObjectiveFromPlan(plan);
+    return { ...plan, objective: gameState.son.objective };
 }
 
 // ============================================================
@@ -4734,6 +4898,7 @@ function updateUI() {
         const nextGoalSubEl = document.getElementById('next-goal-sub');
         if (nextGoalEl) {
             const plan = planAdventureGoal();
+            const objective = plan.objective || gameState.son.objective;
             const label = `${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}`;
             const diffName = (difficultyData[plan.diffKey] || difficultyData.normal).name;
             const diffLabel = `${diffName} (아들 선택)`;
@@ -4742,6 +4907,21 @@ function updateUI() {
             if (nextGoalEl) nextGoalEl.innerText = label;
             const sub = `${diffLabel} · 권장CP ${plan.zone.recCP} · 내 CP ${plan.cp} · ${riskHint}`;
             if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
+
+            // Objective progress + checklist
+            const progEl = document.getElementById('goal-progress');
+            const checklistEl = document.getElementById('goal-checklist');
+            if (progEl) {
+                if (objective) {
+                    const p = getObjectiveProgress(objective);
+                    progEl.innerText = `${p.done ? '✅ ' : '🎯 '}목표: ${p.label}${p.sub ? ` · ${p.sub}` : ''}`;
+                } else {
+                    progEl.innerText = '';
+                }
+            }
+            if (checklistEl) {
+                checklistEl.innerHTML = renderObjectiveChecklistHtml(plan, objective);
+            }
 
             // Why (plan reasons)
             const reasonEl = document.getElementById('goal-reason');
@@ -4777,6 +4957,20 @@ function updateUI() {
 
             // World codex
             renderWorldCodexUI(plan.zone.id);
+
+            // World tab goal
+            const wg = document.getElementById('world-goal');
+            const wgs = document.getElementById('world-goal-sub');
+            const wgc = document.getElementById('world-goal-checklist');
+            if (wg) wg.innerText = label;
+            if (wgs) {
+                const ptxt = objective ? (() => {
+                    const p = getObjectiveProgress(objective);
+                    return `${p.done ? '✅' : '🎯'} ${p.label}${p.sub ? ` · ${p.sub}` : ''}`;
+                })() : '-';
+                wgs.innerText = `${diffLabel} · ${ptxt}`;
+            }
+            if (wgc) wgc.innerHTML = renderObjectiveChecklistHtml(plan, objective);
         }
 
         // Affinity
@@ -5311,6 +5505,10 @@ function startAdventure() {
     gameState.son.adventureEncouraged = false;
 
     const plan = planAdventureGoal();
+    ensureObjectiveState();
+    if (gameState.son.objective && gameState.son.objective.zoneId === plan.zone.id && gameState.son.objective.missionId === plan.mission.id) {
+        gameState.son.objective.tries = Math.max(0, Math.floor(gameState.son.objective.tries || 0) + 1);
+    }
     gameState.son.lastChoice = {
         pick: 'ADVENTURE',
         tick: gameState.worldTick || 0,
