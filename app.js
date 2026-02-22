@@ -543,6 +543,7 @@ function ensureSmithy() {
     if (typeof gameState.parent.smithy.isBusy !== 'boolean') gameState.parent.smithy.isBusy = false;
     if (!gameState.parent.smithy.uiTab) gameState.parent.smithy.uiTab = 'gacha';
     if (!gameState.parent.smithy.craftTab) gameState.parent.smithy.craftTab = 'helmet';
+    if (typeof gameState.parent.smithy.craftOnlyCraftable !== 'boolean') gameState.parent.smithy.craftOnlyCraftable = false;
     const ct = gameState.parent.smithy.craftTab;
     if (ct !== 'helmet' && ct !== 'armor' && ct !== 'boots' && ct !== 'weapon' && ct !== 'seal') {
         gameState.parent.smithy.craftTab = 'helmet';
@@ -4501,13 +4502,143 @@ function gearNeedText(slot, needsGear) {
     return `<span style="color:${color}; font-weight:900;">이전 장비 ${needsGear.name} ${have}/${need}</span>`;
 }
 
+function getNeedDeficits(needs) {
+    const list = [];
+    for (const [k, v] of Object.entries(needs || {})) {
+        ensureLootKey(k);
+        const need = Math.max(0, Math.floor(v || 0));
+        if (!need) continue;
+        const have = materialHave(k);
+        if (have >= need) continue;
+        list.push({ key: k, need, have, missing: need - have });
+    }
+    list.sort((a, b) => (b.missing - a.missing) || (String(a.key).localeCompare(String(b.key))));
+    return list;
+}
+
+function formatDeficitParts(parts, limit = 3) {
+    const p = Array.isArray(parts) ? parts.slice(0, Math.max(1, limit)) : [];
+    if (!p.length) return '병목 없음';
+    return p.map(x => {
+        const name = gameState.parent.loot[x.key]?.name || x.key;
+        return `${name} ${x.have}/${x.need}`;
+    }).join(' · ');
+}
+
+function getNextGearTierToCraft(slot) {
+    const inv = gameState.parent.gearInventory?.[slot] || {};
+    let maxOwned = 0;
+    for (let tier = 1; tier <= (craftConfig?.tierCount || 0); tier++) {
+        const id = `${slot}_t${tier}`;
+        if ((inv[id]?.count || 0) > 0) maxOwned = tier;
+    }
+    return Math.min((craftConfig?.tierCount || 10), Math.max(1, maxOwned + 1));
+}
+
+function getCraftBottleneckHint(tabKey) {
+    ensureSmithy();
+    const tab = tabKey || gameState.parent.smithy.craftTab || 'helmet';
+
+    if (tab === 'seal') {
+        let targetZoneId = null;
+        try {
+            const plan = planAdventureGoal();
+            targetZoneId = plan?.zone?.id || null;
+        } catch (e) {}
+        const zoneOrder = targetZoneId ? [targetZoneId, ...zones.map(z => z.id).filter(x => x !== targetZoneId)] : zones.map(z => z.id);
+        for (const zid of zoneOrder) {
+            const def = bossSealDefs?.[zid];
+            if (!def) continue;
+            if (isBossSealCrafted(zid)) continue;
+            const deficits = getNeedDeficits(def.needs);
+            return { title: `추천: ${def.name}`, sub: formatDeficitParts(deficits, 3) };
+        }
+        return { title: '추천: 보스 인장', sub: '이미 제작을 많이 완료했어요.' };
+    }
+
+    if (tab === 'weapon') {
+        for (const m of (craftConfig?.milestoneWeapons || [])) {
+            const w = gameState.parent.specialWeaponInventory?.[m.id];
+            if ((w?.count || 0) > 0) continue;
+            const deficits = getNeedDeficits(m.needs);
+            return { title: `다음 무기: ${m.name}`, sub: formatDeficitParts(deficits, 3) };
+        }
+        return { title: '다음 무기', sub: '마일스톤 무기를 모두 제작했어요.' };
+    }
+
+    const slot = (tab === 'armor' || tab === 'boots' || tab === 'helmet') ? tab : 'helmet';
+    const nextTier = getNextGearTierToCraft(slot);
+    const r = buildGearRecipe(slot, nextTier);
+    const inv = gameState.parent.gearInventory?.[slot] || {};
+    const prevMissing = (r.needsGear && (inv[r.needsGear.id]?.count || 0) < (r.needsGear.count || 1));
+    const deficits = getNeedDeficits(r.needs);
+    const parts = [];
+    if (prevMissing) parts.push({ key: `prev:${r.needsGear.id}`, need: 1, have: inv[r.needsGear.id]?.count || 0, missing: 1 });
+    deficits.forEach(d => parts.push(d));
+    const sub = parts.length
+        ? parts.slice(0, 3).map(d => {
+            if (String(d.key).startsWith('prev:')) return `이전 장비 ${r.needsGear.name} ${(inv[r.needsGear.id]?.count || 0)}/${r.needsGear.count || 1}`;
+            const name = gameState.parent.loot[d.key]?.name || d.key;
+            return `${name} ${d.have}/${d.need}`;
+        }).join(' · ')
+        : '병목 없음';
+    return { title: `다음 장비: T${nextTier} · ${r.name}`, sub };
+}
+
 function updateCraftUI() {
     const root = document.getElementById('craft-list');
     if (!root) return;
     ensureSmithy();
     applySmithyCraftTabUI();
     const tab = gameState.parent.smithy.craftTab || 'helmet';
+    const onlyCraftable = !!gameState.parent.smithy.craftOnlyCraftable;
     let html = '';
+
+    // Summary: craftable count + next bottleneck hint
+    let craftableCount = 0;
+    let totalCount = 0;
+    if (tab === 'weapon') {
+        for (const m of (craftConfig?.milestoneWeapons || [])) {
+            totalCount += 1;
+            if (canCraftNeeds(m.needs)) craftableCount += 1;
+        }
+    } else if (tab === 'seal') {
+        for (const z of zones) {
+            const def = bossSealDefs?.[z.id];
+            if (!def) continue;
+            totalCount += 1;
+            const crafted = isBossSealCrafted(z.id);
+            if (!crafted && canCraftNeeds(def.needs)) craftableCount += 1;
+        }
+    } else {
+        const slot = (tab === 'armor' || tab === 'boots' || tab === 'helmet') ? tab : 'helmet';
+        for (let tier = 1; tier <= (craftConfig?.tierCount || 0); tier++) {
+            const r = buildGearRecipe(slot, tier);
+            const inv = gameState.parent.gearInventory?.[slot] || {};
+            const hasPrev = !r.needsGear || ((inv[r.needsGear.id]?.count || 0) >= (r.needsGear.count || 1));
+            const can = canCraftNeeds(r.needs) && hasPrev;
+            totalCount += 1;
+            if (can) craftableCount += 1;
+        }
+    }
+
+    const hint = getCraftBottleneckHint(tab);
+    const toggleLabel = onlyCraftable ? '✅ 가능만: ON' : '✅ 가능만: OFF';
+    html += `
+      <div class="hint-card" style="margin-top:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+          <div style="min-width:0;">
+            <div style="font-weight:1000; color:#0f172a;">🧵 제작 요약</div>
+            <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">지금 가능한 제작/승급 <b style="color:#0f172a;">${craftableCount}</b>개 · 전체 <b style="color:#0f172a;">${totalCount}</b>개</div>
+          </div>
+          <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.78rem;" onclick="toggleSmithyCraftOnlyCraftable()">${toggleLabel}</button>
+        </div>
+        <div style="margin-top:10px; font-size:0.78rem; color:#475569;">
+          <div style="font-weight:1000; color:#0f172a;">${hint.title}</div>
+          <div style="margin-top:4px; color:#64748b;">${hint.sub}</div>
+        </div>
+      </div>
+    `;
 
     const renderGearSlot = (slot) => {
         let out = '';
@@ -4517,6 +4648,7 @@ function updateCraftUI() {
             const inv = gameState.parent.gearInventory?.[slot] || {};
             const hasPrev = !r.needsGear || ((inv[r.needsGear.id]?.count || 0) >= (r.needsGear.count || 1));
             const can = canCraftNeeds(r.needs) && hasPrev;
+            if (onlyCraftable && !can) continue;
             const owned = inv[r.id]?.count || 0;
             const actionLabel = tier === 1 ? '제작' : '승급';
             const icon = `<img src="assets/items/${r.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
@@ -4546,6 +4678,7 @@ function updateCraftUI() {
         for (const m of craftConfig.milestoneWeapons) {
             const w = gameState.parent.specialWeaponInventory?.[m.id];
             const can = canCraftNeeds(m.needs);
+            if (onlyCraftable && !can) continue;
             const icon = `<img src="assets/items/${m.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
             out += `
               <div class="craft-item ${can ? '' : 'locked'}">
@@ -4573,6 +4706,7 @@ function updateCraftUI() {
             if (!def) continue;
             const crafted = isBossSealCrafted(z.id);
             const can = !crafted && canCraftNeeds(def.needs);
+            if (onlyCraftable && !can) continue;
             const effect = describeSealEffects(def.effects);
             out += `
               <div class="craft-item ${crafted || can ? '' : 'locked'}">
@@ -4600,8 +4734,20 @@ function updateCraftUI() {
         html += renderGearSlot(slot);
     }
 
+    if (onlyCraftable && craftableCount === 0) {
+        html += `<div class="hint-card" style="margin-top:10px;">지금은 제작/승급 가능한 항목이 없습니다. 위 병목을 먼저 채워보세요.</div>`;
+    }
     root.innerHTML = html;
 }
+
+function toggleSmithyCraftOnlyCraftable() {
+    ensureSmithy();
+    gameState.parent.smithy.craftOnlyCraftable = !gameState.parent.smithy.craftOnlyCraftable;
+    showToast(gameState.parent.smithy.craftOnlyCraftable ? "✅ 제작 탭: 가능만 보기" : "🧵 제작 탭: 전체 보기", 'info');
+    updateCraftUI();
+    saveGame();
+}
+window.toggleSmithyCraftOnlyCraftable = toggleSmithyCraftOnlyCraftable;
 
 function openInventory(roomType) {
     if (roomType === 'kitchen') {
