@@ -2364,6 +2364,7 @@ function describePlanReasons(plan) {
     const reasons = [];
     const d = plan.diffDecision;
     if (d?.reasons?.length) reasons.push(...d.reasons);
+    if (Array.isArray(plan.networkReasons) && plan.networkReasons.length) reasons.push(...plan.networkReasons);
 
     const bravery = gameState.son.personality?.bravery ?? 50;
     const diligence = gameState.son.personality?.diligence ?? 50;
@@ -2781,6 +2782,23 @@ function renderObjectiveChecklistHtml(plan, objective) {
     }).join('');
 }
 
+function getNetworkPlanSig() {
+    ensureNetworkState();
+    const n = gameState.son.network || {};
+    const buddyId = n.buddy?.id ? String(n.buddy.id) : '';
+    const contacts = Array.isArray(n.contacts) ? n.contacts : [];
+    const friendCount = contacts.filter(c => c?.kind === 'friend').length;
+    const mentorCount = contacts.filter(c => c?.kind === 'mentor').length;
+    const inspirationZones = contacts
+        .filter(c => c?.kind === 'inspiration' && typeof c.id === 'string' && c.id.startsWith('inspiration_'))
+        .map(c => c.id.replace('inspiration_', ''))
+        .filter(Boolean)
+        .sort()
+        .slice(0, 6)
+        .join(',');
+    return `${buddyId}|f${friendCount}|m${mentorCount}|z:${inspirationZones}`;
+}
+
 function planAdventureGoal(options = {}) {
     const { refresh = false } = options;
     const cp = getSonCombatPower();
@@ -2790,6 +2808,22 @@ function planAdventureGoal(options = {}) {
     const diffDecision = getAdventureDifficultyDecision();
     const diffKey = diffDecision.diffKey;
     const diff = difficultyData[diffKey] || difficultyData.normal;
+    ensureNetworkState();
+    ensureWorldCodexState();
+    const networkReasons = [];
+    const netSig = getNetworkPlanSig();
+    const n = gameState.son.network || {};
+    const contacts = Array.isArray(n.contacts) ? n.contacts : [];
+    const buddy = n.buddy || null;
+    const hasBuddy = !!buddy;
+    const friendCount = contacts.filter(c => c?.kind === 'friend').length;
+    const mentorCount = contacts.filter(c => c?.kind === 'mentor').length;
+    const inspirationZones = new Set(
+        contacts
+            .filter(c => c?.kind === 'inspiration' && typeof c.id === 'string' && c.id.startsWith('inspiration_'))
+            .map(c => c.id.replace('inspiration_', ''))
+            .filter(Boolean)
+    );
 
     ensureObjectiveState();
     if (!refresh && gameState.son.objective) {
@@ -2804,7 +2838,7 @@ function planAdventureGoal(options = {}) {
     if (!refresh && gameState.son.plannedGoal && gameState.son.plannedGoal.diffKey === diffKey) {
         const cached = gameState.son.plannedGoal;
         const cpDrift = Math.abs((cached.cp || cp) - cp);
-        if (cpDrift <= 12) {
+        if (cpDrift <= 12 && String(cached.netSig || '') === String(netSig)) {
             return { zone: getZoneById(cached.zoneId), mission: getMissionById(cached.missionId), diffKey, diff, cp, diffDecision };
         }
     }
@@ -2814,19 +2848,34 @@ function planAdventureGoal(options = {}) {
 
     // Difficulty acts as a soft cap: safe -> avoid overshoot, risky -> allow more overshoot
     const overshootCap = diffKey === 'safe' ? 1.15 : diffKey === 'risky' ? 1.55 : 1.30;
-    const maxRec = cp * overshootCap;
+    let extraCap = 0;
+    if (hasBuddy) extraCap += 0.14;
+    extraCap += Math.min(0.12, friendCount * 0.03);
+    extraCap += Math.min(0.06, mentorCount * 0.02);
+    const extraCapMax = diffKey === 'safe' ? 0.08 : diffKey === 'risky' ? 0.22 : 0.16;
+    extraCap = Math.max(0, Math.min(extraCapMax, extraCap));
+    const maxRec = cp * overshootCap * (1 + extraCap);
+    if (hasBuddy) networkReasons.push(`동료 ${buddy.name}와(과) 함께라 조금 더 멀리도 생각해요.`);
+    else if (friendCount >= 2) networkReasons.push("친구가 생겨서, 조금 더 멀리도 도전해볼 용기가 나요.");
+    else if (mentorCount >= 1) networkReasons.push("선생님의 조언 덕분에, 준비가 더 단단해졌어요.");
 
     let chosen = zones[0];
     let bestScore = -99999;
     for (const z of zones) {
+        const entry = gameState.parent.worldCodex?.zones?.[z.id] || null;
+        const hinted = inspirationZones.has(z.id);
         const capPenalty = z.recCP > maxRec ? -9999 : 0;
         const closeness = -Math.abs(z.recCP - desiredRec) / Math.max(1, cp);
         const progression = Math.min(1, z.recCP / Math.max(1, cp));
         const braveBonus = bravery >= 60 ? progression * 0.08 : 0;
-        const safeBonus = bravery <= 40 ? (z.recCP <= cp ? 0.06 : -0.12) : 0;
-        const score = capPenalty + closeness + braveBonus + safeBonus;
+        const safePenaltyFactor = hasBuddy ? 0.65 : 1.0;
+        const safeBonus = bravery <= 40 ? (z.recCP <= cp ? 0.06 : -0.12 * safePenaltyFactor) : 0;
+        const hintBonus = hinted ? 0.11 : 0;
+        const exploreBonus = (!entry?.discovered && friendCount > 0) ? (0.03 + Math.min(0.04, friendCount * 0.01)) : 0;
+        const score = capPenalty + closeness + braveBonus + safeBonus + hintBonus + exploreBonus;
         if (score > bestScore) { bestScore = score; chosen = z; }
     }
+    if (inspirationZones.has(chosen.id)) networkReasons.push(`인연에게서 ${chosen.name} 소문을 들었어요.`);
 
     // Mission choice: brave+impulsive => boss/hunt more often, cautious/diligent => gather
     const impulsive = clamp01((50 - diligence) / 50);
@@ -2837,6 +2886,24 @@ function planAdventureGoal(options = {}) {
     wGather += (job.wGatherAdd || 0);
     wHunt += (job.wHuntAdd || 0);
     wBoss += (job.wBossAdd || 0);
+    // Network influence: friends/mentors make harder missions feel more plausible.
+    if (mentorCount > 0) wBoss += Math.min(0.06, mentorCount * 0.02);
+    if (friendCount > 0) {
+        wBoss += Math.min(0.06, friendCount * 0.015);
+        wHunt += Math.min(0.04, friendCount * 0.01);
+    }
+    if (hasBuddy) {
+        wBoss += 0.09;
+        wHunt += 0.04;
+        wGather -= 0.02;
+    }
+    // Rumors about a zone: either gather intel first, or go for the big challenge if intel is enough.
+    if (inspirationZones.has(chosen.id)) {
+        const intel = gameState.parent.worldCodex?.zones?.[chosen.id]?.intel || 0;
+        if (intel < 30) wGather += 0.06;
+        else wBoss += 0.06;
+        wHunt += 0.02;
+    }
     wGather = Math.max(0.05, wGather);
     wHunt = Math.max(0.05, wHunt);
     wBoss = Math.max(0.05, wBoss);
@@ -2844,8 +2911,8 @@ function planAdventureGoal(options = {}) {
     const r = Math.random() * total;
     const mission = r < wGather ? getMissionById('gather') : r < wGather + wHunt ? getMissionById('hunt') : getMissionById('boss');
 
-    gameState.son.plannedGoal = { zoneId: chosen.id, missionId: mission.id, diffKey, cp };
-    const plan = { zone: chosen, mission, diffKey, diff, cp, diffDecision };
+    gameState.son.plannedGoal = { zoneId: chosen.id, missionId: mission.id, diffKey, cp, netSig };
+    const plan = { zone: chosen, mission, diffKey, diff, cp, diffDecision, networkReasons: networkReasons.slice(0, 3) };
     ensureObjectiveFromPlan(plan);
     return { ...plan, objective: gameState.son.objective };
 }
