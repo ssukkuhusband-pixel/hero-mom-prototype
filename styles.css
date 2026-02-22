@@ -835,6 +835,28 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     background: #ffffff;
 }
 
+/* Foldable sections (use to reduce UI clutter) */
+details.fold {
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 10px;
+}
+details.fold > summary {
+    cursor: pointer;
+    font-weight: 1000;
+    color: #0f172a;
+    font-size: 0.82rem;
+    list-style: none;
+}
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after {
+    content: "▾";
+    float: right;
+    color: #94a3b8;
+}
+details.fold[open] > summary::after { content: "▴"; }
+
 /* Affinity Stats & Quest Alert UI */
 .affinity-stats {
     display: flex;

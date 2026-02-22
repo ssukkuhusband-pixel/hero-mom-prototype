@@ -5716,7 +5716,7 @@ function updateUI() {
             const reasonEl = document.getElementById('goal-reason');
             if (reasonEl) {
                 const why = describePlanReasons(plan);
-                reasonEl.innerHTML = why ? `<b>왜 이렇게 정했을까?</b><br>${why}` : '';
+                reasonEl.innerHTML = why || '';
             }
 
             // Support pin + suggestions
@@ -5747,19 +5747,6 @@ function updateUI() {
             // World codex
             renderWorldCodexUI(plan.zone.id);
 
-            // World tab goal
-            const wg = document.getElementById('world-goal');
-            const wgs = document.getElementById('world-goal-sub');
-            const wgc = document.getElementById('world-goal-checklist');
-            if (wg) wg.innerText = label;
-            if (wgs) {
-                const ptxt = objective ? (() => {
-                    const p = getObjectiveProgress(objective);
-                    return `${p.done ? '✅' : '🎯'} ${p.label}${p.sub ? ` · ${p.sub}` : ''}`;
-                })() : '-';
-                wgs.innerText = `${diffLabel} · ${ptxt}`;
-            }
-            if (wgc) wgc.innerHTML = renderObjectiveChecklistHtml(plan, objective);
         }
 
         // Affinity
