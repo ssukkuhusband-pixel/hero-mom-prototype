@@ -6233,14 +6233,8 @@ function updateUI() {
                 }
                 return c;
             })();
-            const canTemper = isSmithyUnlocked('temper') && (gameState.parent.loot.iron_scrap.count || 0) >= 8 && (gameState.parent.loot.arcane_dust.count || 0) >= 2;
-            const canOrder = isSmithyUnlocked('special_order') && gameState.parent.gold >= 6000 && (gameState.parent.loot.arcane_dust.count || 0) >= 6;
-            const canPremium = isSmithyUnlocked('premium_gacha') && gameState.parent.gold >= 2500;
-            if (canOrder) setBadge('badge-smith', '주문', 'warn');
-            else if (canTemper) setBadge('badge-smith', '정련', 'info');
-            else if (craftableHint > 0) setBadge('badge-smith', `제작 ${craftableHint > 9 ? '9+' : craftableHint}`, 'info');
+            if (craftableHint > 0) setBadge('badge-smith', `제작 ${craftableHint > 9 ? '9+' : craftableHint}`, 'info');
             else if (synthPossible > 0) setBadge('badge-smith', `합성 ${synthPossible > 9 ? '9+' : synthPossible}`, 'good');
-            else if (canPremium) setBadge('badge-smith', '고급', 'info');
             else setBadge('badge-smith', '', '');
 
             // Shop badge: keep minimal (no forced prompts)
@@ -6270,7 +6264,7 @@ function updateUI() {
         if (smithBuffEl) {
             const buff = gameState.parent.smithy.buff;
             if (buff?.type === 'lucky' && (buff.pulls || 0) > 0) {
-                smithBuffEl.innerText = `✨ 정련 효과: 다음 뽑기 ${buff.pulls}회`;
+                smithBuffEl.innerText = `✨ 행운 효과: 다음 뽑기 ${buff.pulls}회`;
             } else {
                 smithBuffEl.innerText = '';
             }
