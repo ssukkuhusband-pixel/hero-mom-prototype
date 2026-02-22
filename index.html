@@ -250,84 +250,14 @@
 	                            <button class="seg-btn" data-son-tab="world" onclick="setSonTab('world')">🗺️ 세계</button>
 	                        </div>
 
-	                        <div class="son-tab active" id="son-tab-summary">
-	                        <div class="hint-card" style="margin-top:8px;">
-	                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-	                                <div><b>전투력</b> <span style="color:#94a3b8; font-size:0.85rem;">(CP)</span></div>
-	                                <div style="font-weight:900; font-size:1.2rem; color:#0f172a;"><span id="son-cp">0</span></div>
-                            </div>
-                            <div style="margin-top:6px; font-size:0.8rem; color:#64748b;">
-                                Lv.<span id="son-level-2">1</span> · HP <span id="son-hp-2">0</span>/<span id="son-hpmax-2">0</span> · 허기 <span id="son-hunger-2">0</span>/<span id="son-hungermax-2">0</span>
-                            </div>
-                            <div class="stat-chips" style="margin-top:10px;">
-                                <span class="stat-chip">⚔️ 공격 <b><span id="son-atk-total">0</span></b></span>
-                                <span class="stat-chip">🛡️ 방어 <b><span id="son-def-total">0</span></b></span>
-                                <span class="stat-chip">🧰 장비 공 <b><span id="son-eq-atk">0</span></b></span>
-                                <span class="stat-chip">🧰 장비 방 <b><span id="son-eq-def">0</span></b></span>
-                            </div>
-                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b; line-height:1.35;">
-                                공격/방어는 <b>장비 + 훈련 스탯</b>이 합쳐진 값이에요.
-                            </div>
-                            <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                                <div id="son-injury" style="font-size:0.8rem; color:#10b981; font-weight:700;">🩹 건강</div>
-                                <button id="btn-hospital" class="seg-btn" style="display:none; flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="treatInjuryAtHospital()">🏥 치료</button>
-                            </div>
-                            <div id="son-injury-desc" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
-
-                            <div style="margin-top:10px; border-top:1px solid #e2e8f0; padding-top:10px;">
-                                <b>훈련 스탯</b>
-                                <div class="stat-chips" style="margin-top:10px;">
-                                    <span class="stat-chip">⚔️ 물공 <b><span id="stat-physatk">0</span></b></span>
-                                    <span class="stat-chip">✨ 마공 <b><span id="stat-magatk">0</span></b></span>
-                                    <span class="stat-chip">🛡️ 마저 <b><span id="stat-magres">0</span></b></span>
-                                    <span class="stat-chip">🏃 민첩 <b><span id="stat-agi">0</span></b></span>
-                                    <span class="stat-chip">🎯 명중 <b><span id="stat-acc">0</span></b></span>
-                                </div>
-                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">훈련으로 오르는 스탯은 영구적으로 누적됩니다.</div>
-                            </div>
-                        </div>
-
-	                        <div class="hint-card" style="margin-top:10px;">
-	                            <b>성향</b>
-	                            <div style="margin-top:8px;">
-	                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
-	                                    <span>🧗 대담</span><span>🪵 신중</span>
-                                </div>
-                                <div class="trait-bar"><div class="trait-fill" id="trait-bravery" style="width:50%"></div></div>
-                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
-                                    <span>🗓️ 성실</span><span>🎲 즉흥</span>
-                                </div>
-                                <div class="trait-bar"><div class="trait-fill alt" id="trait-diligence" style="width:50%"></div></div>
-	                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
-	                                    <span>😇 선함</span><span>😈 악함</span>
-	                                </div>
-	                                <div class="trait-bar"><div class="trait-fill" id="trait-morality" style="width:50%"></div></div>
-	                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
-	                                    <span>🪨 완고</span><span>🌿 유연</span>
-	                                </div>
-	                                <div class="trait-bar"><div class="trait-fill alt" id="trait-flexibility" style="width:50%"></div></div>
-                            </div>
-	                            <div id="trait-summary" style="margin-top:8px; font-size:0.8rem; color:#475569;"></div>
-	                            <div id="trait-code" style="margin-top:8px; font-size:0.78rem; color:#64748b;"></div>
-	                        </div>
-
-		                        <div class="hint-card" style="margin-top:10px;">
-		                            <b>직업(계통)</b>
-		                            <div id="son-job" style="margin-top:8px; font-size:1.0rem; font-weight:1000; color:#0f172a;">-</div>
-		                            <div id="son-job-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b; line-height:1.35;">-</div>
-		                        </div>
-
-		                        <div class="hint-card" style="margin-top:10px;">
-		                            <b>🤝 인맥</b>
-		                            <div id="son-network" style="margin-top:8px;"></div>
-		                        </div>
-
-					                        <div class="hint-card goal-card" style="margin-top:10px;">
-					                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-					                                <b>🎯 목표 보드</b>
-					                                <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="setSonTab('world')">🗺️ 도감</button>
-					                            </div>
-				                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">엄마는 유도만, 선택은 아들의 몫이에요.</div>
+		                        <div class="son-tab active" id="son-tab-summary">
+		                            
+		                            <div class="hint-card goal-card" style="margin-top:8px;">
+						                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+						                                <b>🎯 목표 보드</b>
+						                                <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="setSonTab('world')">🗺️ 도감</button>
+						                            </div>
+					                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">엄마는 유도만, 선택은 아들의 몫이에요.</div>
 
 				                            <div style="margin-top:10px;">
 				                                <div style="font-size:0.78rem; color:#64748b; font-weight:900;">현재 목표</div>
@@ -347,21 +277,97 @@
 				                                <div id="goal-reason" style="margin-top:8px; font-size:0.8rem; color:#475569; line-height:1.35;"></div>
 				                            </details>
 
-				                            <details class="fold" style="margin-top:10px;">
-				                                <summary>📌 엄마의 서포트</summary>
-				                                <div id="support-pin" style="margin-top:10px;"></div>
-				                                <div id="support-suggestions" style="margin-top:10px;"></div>
-				                            </details>
-					                        </div>
-				                        <div class="hint-card" style="margin-top:10px;">
-				                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
-				                                <b>💬 부탁</b>
-			                                <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="openMaterialRequestModal()">아들에게 부탁</button>
-			                            </div>
-				                            <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">친밀도가 높을수록, 부탁한 재료를 챙겨올 확률이 조금 올라갑니다.</div>
-				                            <div id="material-request-ui" style="margin-top:10px;"></div>
+					                            <details class="fold" style="margin-top:10px;">
+					                                <summary>📌 엄마의 서포트</summary>
+					                                <div id="support-pin" style="margin-top:10px;"></div>
+					                                <div id="support-suggestions" style="margin-top:10px;"></div>
+					                            </details>
+						                        </div>
+		                            
+		                            <div class="hint-card" style="margin-top:10px;">
+		                                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+		                                    <div><b>지금 상태</b></div>
+		                                    <div style="font-weight:900; font-size:1.2rem; color:#0f172a;"><span id="son-cp">0</span></div>
+		                                </div>
+		                                <div style="margin-top:6px; font-size:0.8rem; color:#64748b;">
+		                                    Lv.<span id="son-level-2">1</span> · HP <span id="son-hp-2">0</span>/<span id="son-hpmax-2">0</span> · 허기 <span id="son-hunger-2">0</span>/<span id="son-hungermax-2">0</span>
+		                                </div>
+		                                <div class="stat-chips" style="margin-top:10px;">
+		                                    <span class="stat-chip">⚔️ 공격 <b><span id="son-atk-total">0</span></b></span>
+		                                    <span class="stat-chip">🛡️ 방어 <b><span id="son-def-total">0</span></b></span>
+		                                    <span class="stat-chip">🧰 장비 공 <b><span id="son-eq-atk">0</span></b></span>
+		                                    <span class="stat-chip">🧰 장비 방 <b><span id="son-eq-def">0</span></b></span>
+		                                </div>
+		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b; line-height:1.35;">
+		                                    공격/방어는 <b>장비 + 훈련 스탯</b>이 합쳐진 값이에요.
+		                                </div>
+		                                <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+		                                    <div id="son-injury" style="font-size:0.8rem; color:#10b981; font-weight:700;">🩹 건강</div>
+		                                    <button id="btn-hospital" class="seg-btn" style="display:none; flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="treatInjuryAtHospital()">🏥 치료</button>
+		                                </div>
+		                                <div id="son-injury-desc" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
+		
+		                                <details class="fold" style="margin-top:10px;">
+		                                    <summary>🏋️ 훈련 스탯</summary>
+		                                    <div class="stat-chips" style="margin-top:10px;">
+		                                        <span class="stat-chip">⚔️ 물공 <b><span id="stat-physatk">0</span></b></span>
+		                                        <span class="stat-chip">✨ 마공 <b><span id="stat-magatk">0</span></b></span>
+		                                        <span class="stat-chip">🛡️ 마저 <b><span id="stat-magres">0</span></b></span>
+		                                        <span class="stat-chip">🏃 민첩 <b><span id="stat-agi">0</span></b></span>
+		                                        <span class="stat-chip">🎯 명중 <b><span id="stat-acc">0</span></b></span>
+		                                    </div>
+		                                    <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">훈련으로 오르는 스탯은 영구적으로 누적됩니다.</div>
+		                                </details>
+		                            </div>
+		
+		                            <details class="fold" style="margin-top:10px;">
+		                                <summary>🧬 성장 정보(성향/직업/인맥)</summary>
+		                                <div class="hint-card" style="margin-top:10px;">
+		                                    <b>성향</b>
+		                                    <div style="margin-top:8px;">
+		                                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+		                                            <span>🧗 대담</span><span>🪵 신중</span>
+		                                        </div>
+		                                        <div class="trait-bar"><div class="trait-fill" id="trait-bravery" style="width:50%"></div></div>
+		                                        <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+		                                            <span>🗓️ 성실</span><span>🎲 즉흥</span>
+		                                        </div>
+		                                        <div class="trait-bar"><div class="trait-fill alt" id="trait-diligence" style="width:50%"></div></div>
+		                                        <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+		                                            <span>😇 선함</span><span>😈 악함</span>
+		                                        </div>
+		                                        <div class="trait-bar"><div class="trait-fill" id="trait-morality" style="width:50%"></div></div>
+		                                        <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+		                                            <span>🪨 완고</span><span>🌿 유연</span>
+		                                        </div>
+		                                        <div class="trait-bar"><div class="trait-fill alt" id="trait-flexibility" style="width:50%"></div></div>
+		                                    </div>
+		                                    <div id="trait-summary" style="margin-top:8px; font-size:0.8rem; color:#475569;"></div>
+		                                    <div id="trait-code" style="margin-top:8px; font-size:0.78rem; color:#64748b;"></div>
+		                                </div>
+		
+		                                <div class="hint-card" style="margin-top:10px;">
+		                                    <b>직업(계통)</b>
+		                                    <div id="son-job" style="margin-top:8px; font-size:1.0rem; font-weight:1000; color:#0f172a;">-</div>
+		                                    <div id="son-job-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b; line-height:1.35;">-</div>
+		                                </div>
+		
+		                                <div class="hint-card" style="margin-top:10px;">
+		                                    <b>🤝 인맥</b>
+		                                    <div id="son-network" style="margin-top:8px;"></div>
+		                                </div>
+		                            </details>
+		
+		                            <details class="fold" style="margin-top:10px;">
+		                                <summary>💬 부탁(재료)</summary>
+		                                <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+		                                    <div><b>부탁</b></div>
+		                                    <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="openMaterialRequestModal()">아들에게 부탁</button>
+		                                </div>
+		                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">친밀도가 높을수록, 부탁한 재료를 챙겨올 확률이 조금 올라갑니다.</div>
+		                                <div id="material-request-ui" style="margin-top:10px;"></div>
+		                            </details>
 				                        </div>
-			                        </div>
 
 		                        <div class="son-tab" id="son-tab-gear">
 		                            <div class="hint-card" style="margin-top:10px;">
