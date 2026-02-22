@@ -2039,10 +2039,29 @@ function decideAdventureDifficulty() {
 // Zones & Missions (RPG adventure structure)
 // ============================================================
 const zones = [
+    // Act 1 (starter)
     { id: 'meadow', name: '햇살 초원', emoji: '🌼', recCP: 25, baseGold: 60, injuryRisk: 0.05, drops: [{ key: 'herb', prob: 35, min: 1, max: 2 }, { key: 'seed', prob: 22, min: 1, max: 2 }, { key: 'leather', prob: 18, min: 1, max: 2 }] },
+    { id: 'creek', name: '맑은 시냇가', emoji: '💧', recCP: 35, baseGold: 72, injuryRisk: 0.06, drops: [{ key: 'herb', prob: 32, min: 1, max: 2 }, { key: 'seed', prob: 20, min: 1, max: 2 }, { key: 'leather', prob: 22, min: 1, max: 2 }, { key: 'monster_bone', prob: 14, min: 1, max: 1 }] },
+    { id: 'burrow', name: '토끼굴 언덕', emoji: '🐾', recCP: 45, baseGold: 82, injuryRisk: 0.07, drops: [{ key: 'leather', prob: 26, min: 1, max: 2 }, { key: 'herb', prob: 26, min: 1, max: 2 }, { key: 'seed', prob: 18, min: 1, max: 2 }, { key: 'monster_bone', prob: 18, min: 1, max: 2 }] },
+
+    // Act 2 (wolf & early combat)
     { id: 'forest', name: '속삭이는 숲', emoji: '🌲', recCP: 55, baseGold: 90, injuryRisk: 0.10, drops: [{ key: 'monster_bone', prob: 30, min: 1, max: 2 }, { key: 'wolf_fang', prob: 28, min: 1, max: 2 }, { key: 'seed', prob: 16, min: 1, max: 2 }, { key: 'leather', prob: 30, min: 1, max: 2 }] },
+    { id: 'grove', name: '그늘진 숲길', emoji: '🌳', recCP: 70, baseGold: 105, injuryRisk: 0.11, drops: [{ key: 'monster_bone', prob: 26, min: 1, max: 2 }, { key: 'wolf_fang', prob: 22, min: 1, max: 2 }, { key: 'seed', prob: 12, min: 1, max: 2 }, { key: 'leather', prob: 26, min: 1, max: 2 }, { key: 'herb', prob: 16, min: 1, max: 2 }] },
+    { id: 'den', name: '늑대의 굴', emoji: '🐺', recCP: 90, baseGold: 125, injuryRisk: 0.12, drops: [{ key: 'wolf_fang', prob: 34, min: 1, max: 2 }, { key: 'monster_bone', prob: 24, min: 1, max: 2 }, { key: 'leather', prob: 22, min: 1, max: 2 }, { key: 'herb', prob: 10, min: 1, max: 1 }] },
+
+    // Act 3 (relic)
     { id: 'ruins', name: '부서진 유적', emoji: '🏛️', recCP: 110, baseGold: 140, injuryRisk: 0.14, drops: [{ key: 'magic_crystal', prob: 20, min: 1, max: 1 }, { key: 'relic_fragment', prob: 26, min: 1, max: 2 }, { key: 'monster_bone', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 26, min: 1, max: 2 }] },
+    { id: 'crypt', name: '고요한 납골당', emoji: '🕯️', recCP: 135, baseGold: 165, injuryRisk: 0.15, drops: [{ key: 'relic_fragment', prob: 28, min: 1, max: 2 }, { key: 'steel', prob: 24, min: 1, max: 2 }, { key: 'magic_crystal', prob: 18, min: 1, max: 1 }, { key: 'monster_bone', prob: 18, min: 1, max: 2 }] },
+    { id: 'library', name: '잊힌 서고', emoji: '📚', recCP: 160, baseGold: 185, injuryRisk: 0.16, drops: [{ key: 'relic_fragment', prob: 22, min: 1, max: 2 }, { key: 'magic_crystal', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 26, min: 1, max: 2 }, { key: 'monster_bone', prob: 14, min: 1, max: 2 }] },
+    { id: 'forge', name: '잠든 제련소', emoji: '🔥', recCP: 190, baseGold: 205, injuryRisk: 0.17, drops: [{ key: 'steel', prob: 34, min: 1, max: 2 }, { key: 'magic_crystal', prob: 18, min: 1, max: 2 }, { key: 'relic_fragment', prob: 20, min: 1, max: 2 }, { key: 'monster_bone', prob: 12, min: 1, max: 2 }] },
+
+    // Act 4 (wyvern)
     { id: 'mountain', name: '바람 산맥', emoji: '🏔️', recCP: 210, baseGold: 220, injuryRisk: 0.18, drops: [{ key: 'rare_hide', prob: 22, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 16, min: 1, max: 1 }, { key: 'steel', prob: 18, min: 1, max: 2 }] },
+    { id: 'pass', name: '빙풍 고개', emoji: '❄️', recCP: 250, baseGold: 255, injuryRisk: 0.19, drops: [{ key: 'wyvern_scale', prob: 22, min: 1, max: 2 }, { key: 'rare_hide', prob: 18, min: 1, max: 1 }, { key: 'steel', prob: 22, min: 1, max: 2 }, { key: 'magic_crystal', prob: 14, min: 1, max: 1 }] },
+    { id: 'cliff', name: '폭풍 절벽', emoji: '🌩️', recCP: 290, baseGold: 285, injuryRisk: 0.21, drops: [{ key: 'wyvern_scale', prob: 24, min: 1, max: 2 }, { key: 'rare_hide', prob: 20, min: 1, max: 1 }, { key: 'steel', prob: 22, min: 1, max: 2 }, { key: 'magic_crystal', prob: 12, min: 1, max: 2 }] },
+    { id: 'aerie', name: '그리핀 둥지길', emoji: '🦅', recCP: 330, baseGold: 315, injuryRisk: 0.23, drops: [{ key: 'rare_hide', prob: 24, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 18, min: 1, max: 2 }, { key: 'magic_crystal', prob: 14, min: 1, max: 2 }] },
+
+    // Act 5 (dragon)
     { id: 'dragon_lair', name: '드래곤 둥지', emoji: '🐉', recCP: 380, baseGold: 380, injuryRisk: 0.26, drops: [{ key: 'dragon_heart', prob: 12, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 22, min: 1, max: 2 }] }
 ];
 
@@ -2061,17 +2080,37 @@ function getMissionById(id) {
 
 const zoneBosses = {
     meadow: { emoji: '🐗', name: '풀숲의 멧돼지 왕' },
+    creek: { emoji: '🐸', name: '시냇가의 거대 개구리' },
+    burrow: { emoji: '🐰', name: '언덕의 토끼왕' },
     forest: { emoji: '🧌', name: '숲의 고블린 대장' },
+    grove: { emoji: '🐍', name: '그늘숲의 뱀왕' },
+    den: { emoji: '🐺', name: '늑대 우두머리' },
     ruins: { emoji: '🗿', name: '유적의 수호자' },
+    crypt: { emoji: '🕯️', name: '납골당의 수호 기사' },
+    library: { emoji: '📚', name: '금서의 수호자' },
+    forge: { emoji: '🔥', name: '잿빛 골렘' },
     mountain: { emoji: '🦅', name: '바람의 그리핀' },
+    pass: { emoji: '🐻‍❄️', name: '설산의 거대 곰' },
+    cliff: { emoji: '🌩️', name: '폭풍 와이번' },
+    aerie: { emoji: '🦅', name: '둥지의 그리핀' },
     dragon_lair: { emoji: '🐉', name: '고룡 아우르네스' }
 };
 
 const bossTrophiesByZone = {
     meadow: { key: 'boar_tusk', emoji: '🐗', name: '멧돼지 왕의 엄니' },
+    creek: { key: 'boar_tusk', emoji: '🐗', name: '멧돼지 왕의 엄니' },
+    burrow: { key: 'boar_tusk', emoji: '🐗', name: '멧돼지 왕의 엄니' },
     forest: { key: 'goblin_crown', emoji: '🧌', name: '고블린 대장 왕관' },
+    grove: { key: 'goblin_crown', emoji: '🧌', name: '고블린 대장 왕관' },
+    den: { key: 'goblin_crown', emoji: '🧌', name: '고블린 대장 왕관' },
     ruins: { key: 'guardian_core', emoji: '🗿', name: '수호자의 핵' },
+    crypt: { key: 'guardian_core', emoji: '🗿', name: '수호자의 핵' },
+    library: { key: 'guardian_core', emoji: '🗿', name: '수호자의 핵' },
+    forge: { key: 'guardian_core', emoji: '🗿', name: '수호자의 핵' },
     mountain: { key: 'griffin_feather', emoji: '🦅', name: '그리핀 깃털' },
+    pass: { key: 'griffin_feather', emoji: '🦅', name: '그리핀 깃털' },
+    cliff: { key: 'griffin_feather', emoji: '🦅', name: '그리핀 깃털' },
+    aerie: { key: 'griffin_feather', emoji: '🦅', name: '그리핀 깃털' },
     dragon_lair: { key: 'ancient_scale', emoji: '🐉', name: '고룡 비늘' }
 };
 
@@ -4089,11 +4128,23 @@ function consumeNeeds(needs) {
     });
 }
 
+function getZoneStageGroup(zoneId) {
+    const z = String(zoneId || '');
+    if (!z) return '';
+    if (z === 'meadow' || z === 'creek' || z === 'burrow') return 'meadow';
+    if (z === 'forest' || z === 'grove' || z === 'den') return 'forest';
+    if (z === 'ruins' || z === 'crypt' || z === 'library' || z === 'forge') return 'ruins';
+    if (z === 'mountain' || z === 'pass' || z === 'cliff' || z === 'aerie') return 'mountain';
+    if (z === 'dragon_lair') return 'dragon';
+    return '';
+}
+
 function pickZoneCoreKey(zoneId) {
-    if (zoneId === 'forest') return 'wolf_fang';
-    if (zoneId === 'ruins') return 'relic_fragment';
-    if (zoneId === 'mountain') return 'wyvern_scale';
-    if (zoneId === 'dragon_lair') return 'dragon_heart';
+    const g = getZoneStageGroup(zoneId);
+    if (g === 'forest') return 'wolf_fang';
+    if (g === 'ruins') return 'relic_fragment';
+    if (g === 'mountain') return 'wyvern_scale';
+    if (g === 'dragon') return 'dragon_heart';
     return null;
 }
 
@@ -7114,15 +7165,16 @@ function maybeBuildAdventureStoryLetter(adv, ctx) {
         effects.push('인맥 +1');
 
         // A tiny “thank you” material (helps crafting feel alive).
-        const giftPool = zone?.id === 'forest'
-            ? ['wolf_fang', 'monster_bone']
-            : zone?.id === 'ruins'
-                ? ['relic_fragment', 'magic_crystal']
-                : zone?.id === 'mountain'
-                    ? ['steel', 'wyvern_scale']
-                    : zone?.id === 'dragon_lair'
-                        ? ['steel', 'magic_crystal']
-                        : ['herb', 'leather'];
+        const group = getZoneStageGroup(zone?.id);
+        const giftPool = group === 'forest'
+            ? ['wolf_fang', 'monster_bone', 'leather']
+            : group === 'ruins'
+                ? ['relic_fragment', 'magic_crystal', 'steel']
+                : group === 'mountain'
+                    ? ['wyvern_scale', 'steel', 'rare_hide']
+                    : group === 'dragon'
+                        ? ['magic_crystal', 'steel', 'wyvern_scale']
+                        : ['herb', 'leather', 'monster_bone'];
         const giftKey = giftPool[Math.floor(Math.random() * giftPool.length)];
         ensureLootKey(giftKey);
         gameState.parent.loot[giftKey].count += 1;
@@ -7141,15 +7193,16 @@ function maybeBuildAdventureStoryLetter(adv, ctx) {
             '벽 틈에서 작은 빛이 새어 나왔어요. 이상했지만… 멈출 수가 없었어요.'
         ];
         const pickedLine = pickName(lines);
-        const pool = zone?.id === 'ruins'
-            ? ['relic_fragment', 'magic_crystal']
-            : zone?.id === 'mountain'
-                ? ['wyvern_scale', 'steel']
-                : zone?.id === 'dragon_lair'
-                    ? ['magic_crystal', 'steel']
-                    : zone?.id === 'forest'
-                        ? ['wolf_fang', 'monster_bone']
-                        : ['herb', 'leather'];
+        const group = getZoneStageGroup(zone?.id);
+        const pool = group === 'ruins'
+            ? ['relic_fragment', 'magic_crystal', 'steel']
+            : group === 'mountain'
+                ? ['wyvern_scale', 'steel', 'rare_hide']
+                : group === 'dragon'
+                    ? ['magic_crystal', 'steel', 'wyvern_scale']
+                    : group === 'forest'
+                        ? ['wolf_fang', 'monster_bone', 'leather']
+                        : ['herb', 'leather', 'monster_bone'];
         const key = pool[Math.floor(Math.random() * pool.length)];
         ensureLootKey(key);
         gameState.parent.loot[key].count += 1;
