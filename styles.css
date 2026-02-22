@@ -544,6 +544,14 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
 #debug-modal { z-index: 135; }
 #travel-modal { z-index: 140; }
 
+/* Debug modal scrolling */
+#debug-content {
+    flex: 1 1 auto;
+    min-height: 0; /* allow flex child to shrink and scroll */
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
 /* Travel modal (leave/return) */
 .travel-modal-content {
     width: 92%;
