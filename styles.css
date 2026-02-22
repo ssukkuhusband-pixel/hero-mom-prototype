@@ -646,6 +646,20 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     overflow-y: auto;
     padding-right: 2px;
 }
+
+/* Inventory + Requests modals: keep close button visible and scroll only the list */
+#inv-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+#quest-modal #request-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
 .furn-shop-grid {
     display: flex;
     flex-direction: column;

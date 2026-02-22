@@ -617,15 +617,19 @@
 	            </section>
 	        </section>
 
-        <!-- Inventory Modal -->
-        <div class="modal-overlay" id="inv-modal">
-            <div class="modal-content">
-                <h3>인벤토리</h3>
-                <p id="inv-desc" style="font-size:0.85rem; margin-bottom:15px;">이 방에 배치할 아이템을 선택하세요.</p>
-                <div id="inv-list"></div>
-                <button class="action-btn" style="background:#ef4444; margin-top:15px;" onclick="closeInventory()">닫기</button>
-            </div>
-        </div>
+	        <!-- Inventory Modal -->
+	        <div class="modal-overlay" id="inv-modal">
+	            <div class="modal-content furn-modal-content">
+                    <div class="furn-modal-head">
+                        <div>
+                            <h3 style="margin-bottom:2px;">인벤토리</h3>
+                            <div id="inv-desc" style="font-size:0.8rem; color:#64748b;">이 방에 배치할 아이템을 선택하세요.</div>
+                        </div>
+                        <button class="wardrobe-close" type="button" onclick="closeInventory()">닫기</button>
+                    </div>
+	                <div id="inv-list" style="margin-top:12px;"></div>
+	            </div>
+	        </div>
 
 	        <!-- Furniture Swap Modal -->
 	        <div class="modal-overlay" id="furn-modal">
@@ -670,19 +674,19 @@
 		            </div>
 		        </div>
 
-		        <!-- Requests Modal -->
-		        <div class="modal-overlay" id="quest-modal">
-		            <div class="modal-content">
-	                    <div class="furn-modal-head" style="margin-bottom:10px;">
-                        <div>
-                            <h3 style="margin-bottom:2px;">📋 아들의 요청</h3>
-                            <div style="font-size:0.8rem; color:#64748b;">요청은 목록에 쌓이고, <b>기한 내</b> 해결하면 좋아해요.</div>
+			        <!-- Requests Modal -->
+			        <div class="modal-overlay" id="quest-modal">
+			            <div class="modal-content furn-modal-content">
+		                    <div class="furn-modal-head" style="margin-bottom:10px;">
+	                        <div>
+	                            <h3 style="margin-bottom:2px;">📋 아들의 요청</h3>
+	                            <div style="font-size:0.8rem; color:#64748b;">요청은 목록에 쌓이고, <b>기한 내</b> 해결하면 좋아해요.</div>
                         </div>
                         <button class="wardrobe-close" type="button" onclick="closeRequestsModal()">닫기</button>
-                    </div>
-                    <div id="request-list"></div>
-            </div>
-        </div>
+	                    </div>
+	                    <div id="request-list"></div>
+	            </div>
+	        </div>
 
         <!-- Balance/Debug Modal -->
         <div class="modal-overlay" id="debug-modal">
