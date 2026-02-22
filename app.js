@@ -8,10 +8,42 @@
 // --- Toast System (replaces all alert()) ---
 function showToast(msg, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const MAX_TOASTS = 4;
+    const DEDUPE_WINDOW_MS = 1200;
+    const now = Date.now();
+    const key = `${type}:${String(msg || '')}`;
+
+    // If the newest toast is identical, coalesce to avoid spam covering the UI.
+    const newest = container.firstElementChild;
+    if (newest && newest.dataset && newest.dataset.key === key) {
+        const lastAt = parseInt(newest.dataset.at || '0', 10) || 0;
+        if ((now - lastAt) <= DEDUPE_WINDOW_MS) {
+            const n = (parseInt(newest.dataset.count || '1', 10) || 1) + 1;
+            newest.dataset.count = String(n);
+            newest.dataset.at = String(now);
+            newest.innerText = n >= 2 ? `${msg} ×${n}` : String(msg || '');
+            return;
+        }
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerText = msg;
-    container.appendChild(toast);
+    toast.dataset.key = key;
+    toast.dataset.count = '1';
+    toast.dataset.at = String(now);
+
+    // Newest on top
+    container.prepend(toast);
+
+    // Hard cap visible toasts
+    while (container.children.length > MAX_TOASTS) {
+        const last = container.lastElementChild;
+        if (!last) break;
+        last.remove();
+    }
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2600);
 }
 
