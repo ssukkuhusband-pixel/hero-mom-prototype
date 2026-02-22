@@ -15,6 +15,43 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2600);
 }
 
+// --- Pause / Time Freeze (used by important popups) ---
+let isGamePaused = false;
+let pauseStartedAtMs = 0;
+let pauseReason = null;
+
+function pauseGame(reason = '') {
+    if (isGamePaused) return;
+    isGamePaused = true;
+    pauseStartedAtMs = Date.now();
+    pauseReason = reason || null;
+}
+
+function resumeGame() {
+    if (!isGamePaused) return;
+    const now = Date.now();
+    const dt = Math.max(0, now - (pauseStartedAtMs || now));
+    isGamePaused = false;
+    pauseStartedAtMs = 0;
+    pauseReason = null;
+    shiftRealtimeDeadlinesBy(dt);
+}
+
+function shiftRealtimeDeadlinesBy(dtMs) {
+    const dt = Math.max(0, Math.floor(dtMs || 0));
+    if (!dt) return;
+    // Requests use Date.now() deadlines; pause should freeze them.
+    try {
+        ensureRequestState();
+        for (const r of (gameState.son.requests || [])) {
+            if (!r || r.status !== 'open') continue;
+            if (Number.isFinite(r.dueAt)) r.dueAt += dt;
+        }
+    } catch (e) {
+        console.warn('shiftRealtimeDeadlinesBy failed:', e);
+    }
+}
+
 function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
@@ -129,7 +166,7 @@ const DEFAULT_GAME_STATE = {
         trainingMastery: { strength: 0, magic: 0, archery: 0 },
         injury: null, // { severity, label, remaining, cpMul, riskMul, healMul, hungerDrain }
         plannedGoal: null, // { zoneId, missionId, diffKey, cp }
-        quest: null,
+        requests: [], // [{ id, kind, title, desc, help, createdAt, dueAt, status, data }]
         adventure: null,
         adventureEncouraged: false,
         nextAdventureBuff: null // { id, name, desc, expMul, goldMul, lootMul, riskMul, fatigueAdd, source }
@@ -181,6 +218,8 @@ function loadGame() {
         ensureSonUiState();
         ensureSupportPinState();
         cleanupLegacyParentSettings();
+        ensureRequestState();
+        sanitizeMailboxLog();
         return true;
     } catch (e) {
         console.warn('loadGame failed', e);
@@ -442,6 +481,24 @@ function ensureSupportPinState() {
     const p = gameState.parent.supportPin;
     if (!p) return;
     if (typeof p !== 'object' || !p.type) gameState.parent.supportPin = null;
+}
+
+function ensureRequestState() {
+    if (!gameState.son || typeof gameState.son !== 'object') gameState.son = {};
+    if (!Array.isArray(gameState.son.requests)) {
+        // migrate legacy single quest
+        if (gameState.son.quest && typeof gameState.son.quest === 'object') {
+            gameState.son.requests = [];
+        } else {
+            gameState.son.requests = [];
+        }
+    }
+    // cleanup legacy field if present
+    if ('quest' in gameState.son) delete gameState.son.quest;
+    // sanitize
+    gameState.son.requests = gameState.son.requests
+        .filter(r => r && typeof r === 'object' && r.id && r.kind && r.dueAt)
+        .slice(0, 10);
 }
 
 function cleanupLegacyParentSettings() {
@@ -1192,9 +1249,7 @@ const els = {
     questAlert: document.getElementById('quest-alert'),
     questTimer: document.getElementById('quest-timer'),
     questModal: document.getElementById('quest-modal'),
-    questModalTimer: document.getElementById('quest-modal-timer'),
-    questDesc: document.getElementById('quest-desc'),
-    btnQuestAccept: document.getElementById('btn-quest-accept'),
+    requestList: document.getElementById('request-list'),
     sonStateLabel: document.getElementById('son-state-label'),
     // New elements
     adventureView: document.getElementById('adventure-view'),
@@ -1208,7 +1263,14 @@ const els = {
     advLast: document.getElementById('adv-last'),
     farmGrid: document.getElementById('farm-grid'),
     cookList: document.getElementById('cook-list'),
-    buffInfo: document.getElementById('buff-info')
+    buffInfo: document.getElementById('buff-info'),
+    travelModal: document.getElementById('travel-modal'),
+    travelTitle: document.getElementById('travel-title'),
+    travelSub: document.getElementById('travel-sub'),
+    travelImg: document.getElementById('travel-img'),
+    travelDialogue: document.getElementById('travel-dialogue'),
+    travelSummary: document.getElementById('travel-summary'),
+    travelActions: document.getElementById('travel-actions')
 };
 
 const weaponsList = [
@@ -3953,62 +4015,8 @@ function handleQuestTick() {
 }
 
 function openQuestModal() {
-    const q = gameState.son.quest;
-    if (!q) return;
-    els.questDesc.innerText = `"${q.desc}"`;
-
-    // Build dynamic action buttons based on quest type
-    const actionsEl = document.getElementById('quest-actions');
-    actionsEl.innerHTML = '';
-
-    // Check if we can fulfill right now
-    const canFulfill = checkQuestFulfillable(q);
-
-    if (canFulfill.possible) {
-        // "바로 들어주기" button
-        const btnNow = document.createElement('button');
-        btnNow.className = 'action-btn';
-        btnNow.style.cssText = 'background:#3b82f6; margin-top:0;';
-        btnNow.innerText = `✅ ${canFulfill.label}`;
-        btnNow.onclick = () => acceptQuest();
-        actionsEl.appendChild(btnNow);
-    }
-
-    // "준비할게!" button — buy time (only if not already extended & quest allows)
-    if (!q.extended && q.type !== 'attention') {
-        const btnPrepare = document.createElement('button');
-        btnPrepare.className = 'action-btn';
-        btnPrepare.style.cssText = 'background:#f59e0b; color:#1e293b; margin-top:0;';
-        btnPrepare.innerText = `⏳ 잠깐만! 엄마가 준비할게 (+${getExtendTime(q)}초)`;
-        btnPrepare.onclick = () => extendQuest();
-        actionsEl.appendChild(btnPrepare);
-
-        // Show hint about what's needed
-        const hint = document.createElement('p');
-        hint.style.cssText = 'font-size:0.75rem; color:#64748b; margin-top:5px; text-align:left;';
-        hint.innerHTML = getQuestHint(q);
-        actionsEl.appendChild(hint);
-    }
-
-    if (!canFulfill.possible && q.type === 'attention') {
-        // Attention quest — just click to fulfill
-        const btnAttention = document.createElement('button');
-        btnAttention.className = 'action-btn';
-        btnAttention.style.cssText = 'background:#ec4899; margin-top:0;';
-        btnAttention.innerText = '🤗 안아주기';
-        btnAttention.onclick = () => acceptQuest();
-        actionsEl.appendChild(btnAttention);
-    }
-
-    // "거절" button
-    const btnReject = document.createElement('button');
-    btnReject.className = 'action-btn';
-    btnReject.style.cssText = 'background:#94a3b8; margin-top:0;';
-    btnReject.innerText = '거절하기 (반항심 증가)';
-    btnReject.onclick = () => rejectQuest();
-    actionsEl.appendChild(btnReject);
-
-    els.questModal.style.display = 'flex';
+    // Legacy alias: quest system was replaced by accumulated requests.
+    openRequestsModal();
 }
 window.openQuestModal = openQuestModal;
 
@@ -4163,6 +4171,359 @@ function rejectQuest() {
 window.rejectQuest = rejectQuest;
 
 // ============================================================
+// Requests system (accumulates + deadline-based completion)
+// ============================================================
+const requestTemplates = [
+    {
+        kind: 'need_book',
+        title: '📚 책이 필요해요',
+        desc: '엄마, 책 좀… 읽고 싶어요.',
+        help: '해결: 집(서재)에서 책장에 책을 배치해두기',
+        durationMs: 60 * 60 * 1000, // 1h
+        passive: true
+    },
+    {
+        kind: 'need_steak',
+        title: '🥩 스테이크 해주세요',
+        desc: '엄마! 오늘은 스테이크 먹고 싶어요!',
+        help: '해결: 주방에서 스테이크를 조리하면 식탁에 자동으로 올라가요',
+        durationMs: 60 * 1000, // 1m
+        passive: true
+    },
+    {
+        kind: 'need_better_weapon',
+        title: '🗡️ 더 좋은 무기 없어요?',
+        desc: '엄마, 더 좋은 무기 없어요?',
+        help: '해결: 옷장에서 더 좋은 무기를 장착해두기 (또는 자동 장착 버튼)',
+        durationMs: 4 * 60 * 1000,
+        passive: true
+    },
+    {
+        kind: 'need_money',
+        title: '🪙 용돈 주세요',
+        desc: '엄마, 용돈 조금만…',
+        help: '해결: 요청 목록에서 골드를 지급하기',
+        durationMs: 6 * 60 * 1000,
+        passive: false
+    },
+    {
+        kind: 'need_hug',
+        title: '🤗 나 좀 봐주세요',
+        desc: '엄마, 나 좀 봐주세요!',
+        help: '해결: 요청 목록에서 “안아주기” 버튼 누르기',
+        durationMs: 90 * 1000,
+        passive: false
+    }
+];
+
+function newRequestId() {
+    return `req_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+}
+
+function formatRemainingMs(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function getOpenRequests() {
+    ensureRequestState();
+    return (gameState.son.requests || []).filter(r => r && r.status === 'open');
+}
+
+function countShelfBooks() {
+    ensureLibraryState();
+    return (gameState.parent.library?.shelf || []).filter(Boolean).length;
+}
+
+function addRequestFromTemplate(kind) {
+    ensureRequestState();
+    ensureSonGrowthState();
+    const tpl = requestTemplates.find(t => t.kind === kind);
+    if (!tpl) return null;
+
+    const open = getOpenRequests();
+    if (open.some(r => r.kind === kind)) return null;
+
+    const now = Date.now();
+    const req = {
+        id: newRequestId(),
+        kind: tpl.kind,
+        title: tpl.title,
+        desc: tpl.desc,
+        help: tpl.help,
+        createdAt: now,
+        dueAt: now + tpl.durationMs,
+        status: 'open',
+        data: {}
+    };
+
+    if (kind === 'need_money') {
+        const amount = Math.random() < 0.5 ? 50 : 100;
+        req.data.amount = amount;
+        req.desc = amount === 100 ? '엄마, 용돈 100골드만 주세요!' : '엄마… 50골드만…';
+        req.help = `해결: 요청 목록에서 ${amount}G 지급하기`;
+    }
+    if (kind === 'need_better_weapon') {
+        req.data.baselineAtk = gameState.son.equipment?.weapon?.atk || 0;
+        req.data.baselineName = gameState.son.equipment?.weapon?.name || '';
+        req.help = `해결: 현재(${req.data.baselineName} 공+${req.data.baselineAtk})보다 좋은 무기를 장착해두기`;
+    }
+    if (kind === 'need_book') {
+        req.data.baselineShelfCount = countShelfBooks();
+        req.help = req.data.baselineShelfCount > 0
+            ? '해결: 책장에 “새 책”을 한 권 더 배치해두기'
+            : '해결: 집(서재)에서 책장에 책을 1권 이상 배치해두기';
+    }
+
+    gameState.son.requests.unshift(req);
+    if (gameState.son.requests.length > 10) gameState.son.requests = gameState.son.requests.slice(0, 10);
+
+    sonSpeech("엄마!! 부탁이 있어요!");
+    addMail("📋 아들의 요청", `${req.title}\n"${req.desc}"\n\n${req.help}`);
+    showToast("📋 아들의 요청이 추가되었습니다.", 'info');
+    updateUI();
+    return req;
+}
+
+function isRequestConditionMet(req) {
+    if (!req || req.status !== 'open') return false;
+    if (req.kind === 'need_steak') {
+        return gameState.rooms?.['room-table']?.placedItem === 'steak';
+    }
+    if (req.kind === 'need_book') {
+        const base = Math.max(0, Math.floor(req.data?.baselineShelfCount || 0));
+        return countShelfBooks() > base;
+    }
+    if (req.kind === 'need_better_weapon') {
+        const baseAtk = Math.max(0, Math.floor(req.data?.baselineAtk || 0));
+        const curAtk = gameState.son.equipment?.weapon?.atk || 0;
+        return curAtk > baseAtk;
+    }
+    return false;
+}
+
+function applyRequestSuccess(req, meta = {}) {
+    const auto = !!meta.auto;
+    const affection = req.kind === 'need_hug' ? 6 : 8;
+    const trust = req.kind === 'need_money' ? 4 : 3;
+    const rebellionDown = req.kind === 'need_hug' ? 6 : 4;
+    gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + affection, 0, 100);
+    gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + trust, 0, 100);
+    gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - rebellionDown, 0, 100);
+    gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) + 1, 0, 100);
+    if (req.kind === 'need_book' || req.kind === 'need_steak') {
+        gameState.son.personality.flexibility = clampInt((gameState.son.personality.flexibility ?? 50) + 1, 0, 100);
+    }
+    addMail("✅ 요청 완료", `${req.title}\n${auto ? '(자동 완료)' : ''}\n아들이 기뻐합니다.`);
+    showToast("✅ 요청을 해결했습니다!", 'success');
+}
+
+function applyRequestFail(req) {
+    gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) + 10, 0, 100);
+    gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) - 4, 0, 100);
+    gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) - 2, 0, 100);
+    gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
+    addMail("⏰ 요청 실패", `${req.title}\n기한 내 해결하지 못했습니다. (⚡반항 상승)`);
+    showToast("⏰ 요청을 놓쳤습니다...", 'warning');
+}
+
+function completeRequest(reqId, meta = {}) {
+    ensureRequestState();
+    const req = gameState.son.requests.find(r => r.id === reqId);
+    if (!req || req.status !== 'open') return false;
+    req.status = 'done';
+    applyRequestSuccess(req, meta);
+    updateUI();
+    return true;
+}
+
+function fulfillRequestNow(reqId) {
+    ensureRequestState();
+    const req = gameState.son.requests.find(r => r.id === reqId);
+    if (!req || req.status !== 'open') return;
+
+    if (req.kind === 'need_money') {
+        const amt = Math.max(0, Math.floor(req.data?.amount || 0));
+        if (gameState.parent.gold < amt) {
+            showToast("골드가 부족합니다!", 'error');
+            return;
+        }
+        gameState.parent.gold -= amt;
+        completeRequest(reqId);
+        return;
+    }
+    if (req.kind === 'need_hug') {
+        sonSpeech("헤헤… 고마워요 엄마.");
+        completeRequest(reqId);
+        return;
+    }
+    showToast("이 요청은 행동으로 해결됩니다. (해결 방법 참고)", 'info');
+}
+window.fulfillRequestNow = fulfillRequestNow;
+
+function autoEquipBestWeapon() {
+    const curAtk = gameState.son.equipment?.weapon?.atk || 0;
+    let best = { type: null, id: null, tier: null, atk: curAtk };
+
+    const tiers = ['C', 'B', 'A', 'S'];
+    for (const t of tiers) {
+        const item = gameState.parent.weaponInventory?.[t];
+        if (!item || (item.count || 0) <= 0) continue;
+        if ((item.atk || 0) > best.atk) best = { type: 'tier', tier: t, atk: item.atk };
+    }
+    for (const [id, w] of Object.entries(gameState.parent.specialWeaponInventory || {})) {
+        if (!w || (w.count || 0) <= 0) continue;
+        if ((w.atk || 0) > best.atk) best = { type: 'special', id, atk: w.atk };
+    }
+
+    if (!best.type) {
+        showToast("장착할 더 좋은 무기가 없어요.", 'warning');
+        return false;
+    }
+    if (best.type === 'tier') equipWeaponTier(best.tier);
+    else equipSpecialWeapon(best.id);
+    return true;
+}
+window.autoEquipBestWeapon = autoEquipBestWeapon;
+
+function openRequestsModal() {
+    if (els.questModal) els.questModal.style.display = 'flex';
+    renderRequestsUI();
+    updateUI();
+}
+window.openRequestsModal = openRequestsModal;
+
+function closeRequestsModal() {
+    if (els.questModal) els.questModal.style.display = 'none';
+}
+window.closeRequestsModal = closeRequestsModal;
+
+function renderRequestsUI() {
+    if (!els.requestList) return;
+    ensureRequestState();
+    const open = getOpenRequests();
+    if (!open.length) {
+        els.requestList.innerHTML = `<div class="hint-card" style="background:#f8fafc; border:1px solid #e2e8f0;">아직 쌓인 요청이 없습니다.</div>`;
+        return;
+    }
+    const now = Date.now();
+    open.sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
+
+    els.requestList.innerHTML = open.map(req => {
+        const remaining = Math.max(0, (req.dueAt || 0) - now);
+        const remText = formatRemainingMs(remaining);
+        const urgent = remaining <= 30 * 1000;
+        const canPay = req.kind === 'need_money' ? (gameState.parent.gold >= (req.data?.amount || 0)) : true;
+
+        let actionHtml = '';
+        if (req.kind === 'need_money') {
+            const amt = req.data?.amount || 0;
+            actionHtml = `
+              <button class="mini-btn" type="button" ${canPay ? '' : 'disabled'} onclick="fulfillRequestNow('${req.id}')">지급 (${amt}G)</button>
+            `;
+        } else if (req.kind === 'need_hug') {
+            actionHtml = `<button class="mini-btn" type="button" onclick="fulfillRequestNow('${req.id}')">🤗 안아주기</button>`;
+        } else if (req.kind === 'need_better_weapon') {
+            actionHtml = `
+              <button class="mini-btn" type="button" onclick="autoEquipBestWeapon()">자동 장착</button>
+              <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-wardrobe')">옷장</button>
+            `;
+        } else if (req.kind === 'need_book') {
+            actionHtml = `
+              <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-desk'); openBookshelfManager();">책장</button>
+            `;
+        } else if (req.kind === 'need_steak') {
+            actionHtml = `
+              <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-table'); openKitchenCookMenu();">주방</button>
+            `;
+        } else {
+            actionHtml = `<button class="mini-btn secondary" type="button" onclick="setMainView('son'); setSonTab('summary')">확인</button>`;
+        }
+
+        return `
+          <div class="support-row ${urgent ? 'pinned' : ''}">
+            <div style="flex:1; min-width:0;">
+              <div class="support-title">${req.title} <span style="font-size:0.75rem; color:${urgent ? '#ef4444' : '#64748b'}; font-weight:1000;">⏰ ${remText}</span></div>
+              <div class="support-sub">"${req.desc}"</div>
+              <div class="support-sub" style="margin-top:8px;"><b>해결 방법</b><br>${req.help}</div>
+            </div>
+            <div class="support-actions">${actionHtml}</div>
+          </div>
+        `;
+    }).join('');
+}
+
+function requestsTick() {
+    ensureRequestState();
+    const now = Date.now();
+    let changed = false;
+    for (const r of gameState.son.requests) {
+        if (!r || r.status !== 'open') continue;
+        if (isRequestConditionMet(r)) {
+            r.status = 'done';
+            applyRequestSuccess(r, { auto: true });
+            changed = true;
+            continue;
+        }
+        if ((r.dueAt || 0) <= now) {
+            r.status = 'failed';
+            applyRequestFail(r);
+            changed = true;
+        }
+    }
+    if (changed) updateUI();
+}
+
+let lastRequestRollAt = 0;
+function triggerRandomRequest() {
+    ensureRequestState();
+    const now = Date.now();
+    const open = getOpenRequests();
+    if (open.length >= 3) return;
+    if (now - lastRequestRollAt < 18 * 1000) return;
+    lastRequestRollAt = now;
+
+    if (Math.random() > 0.55) return;
+
+    const weights = [
+        { kind: 'need_steak', w: 22 },
+        { kind: 'need_book', w: 18 },
+        { kind: 'need_better_weapon', w: 14 },
+        { kind: 'need_money', w: 12 },
+        { kind: 'need_hug', w: 10 }
+    ].filter(x => !open.some(r => r.kind === x.kind));
+    if (!weights.length) return;
+    const picked = rollFromWeights(weights);
+    addRequestFromTemplate(picked.kind);
+}
+
+function updateRequestsAlertUI() {
+    if (!els.questAlert || !els.questTimer) return;
+    const open = getOpenRequests();
+    if (!open.length) {
+        els.questAlert.style.display = 'none';
+        return;
+    }
+    const now = Date.now();
+    const soonest = open.reduce((best, r) => (!best || (r.dueAt || 0) < (best.dueAt || 0)) ? r : best, null);
+    const remaining = soonest ? Math.max(0, (soonest.dueAt || 0) - now) : 0;
+    const remText = formatRemainingMs(remaining);
+    els.questAlert.style.display = 'block';
+    els.questAlert.innerHTML = `📋 아들의 요청 <b>${open.length}</b>개 · 가장 급함 <span id="quest-timer">${remText}</span>`;
+    if (els.questModal && els.questModal.style.display === 'flex') renderRequestsUI();
+}
+
+if (els.questModal) {
+    els.questModal.addEventListener('click', (e) => {
+        if (e.target === els.questModal) closeRequestsModal();
+    });
+}
+
+// ============================================================
 // Core UI Update
 // ============================================================
 function updateUI() {
@@ -4174,6 +4535,7 @@ function updateUI() {
         ensureLibraryState();
         ensureWorkState();
         ensureSupportPinState();
+        ensureRequestState();
         applySmithyTabUI();
         applyShopTabUI();
         applySonTabUI();
@@ -4508,27 +4870,8 @@ function updateUI() {
         // Enable/disable smithy actions based on unlocks + busy state
         setSmithyBusy(gameState.parent.smithy.isBusy);
 
-        // Quest Alert
-        if (gameState.son.quest) {
-            els.questAlert.style.display = 'block';
-            els.questTimer.innerText = gameState.son.quest.timer;
-            // Update banner text to show quest type
-            const q = gameState.son.quest;
-            const questIcons = {
-                money: '💰',
-                food: '🍖',
-                equipment: '⚔️',
-                attention: '🤗'
-            };
-            const ctx = q.context || 'home';
-            const label = ctx === 'adventure' ? '모험 중 연락이 왔습니다!' : '아들의 부탁이 있습니다!';
-            els.questAlert.innerHTML = `${questIcons[q.type] || '❗'} ${label} (남은 시간: <span id="quest-timer">${q.timer}</span>초)${q.extended ? ' <span style="font-size:0.75rem;">⏳연장됨</span>' : ''}`;
-            if (els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) {
-                els.questModalTimer.innerText = gameState.son.quest.timer;
-            }
-        } else {
-            if (els.questAlert) els.questAlert.style.display = 'none';
-        }
+        // Requests alert (accumulated)
+        updateRequestsAlertUI();
 
         // Son room indicator
         els.roomTabs.forEach(tab => {
@@ -4631,12 +4974,33 @@ els.sprite.addEventListener('click', () => {
     if (gameState.son.state !== 'ADVENTURING') sonSpeech("엄마 사랑해요!");
 });
 
+function isSonMailTitle(title) {
+    const t = String(title || '');
+    // Mailbox keeps only son's letters.
+    return t.startsWith('📮');
+}
+
+function sanitizeMailboxLog() {
+    if (!gameState.parent) gameState.parent = {};
+    if (!Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
+    const before = gameState.parent.mailLog.length;
+    gameState.parent.mailLog = gameState.parent.mailLog
+        .filter(m => m && isSonMailTitle(m.title))
+        .slice(0, 10);
+    if (!Number.isFinite(gameState.parent.mailUnread)) gameState.parent.mailUnread = 0;
+    if (before !== gameState.parent.mailLog.length) gameState.parent.mailUnread = 0;
+    gameState.parent.mailUnread = Math.max(0, Math.min(gameState.parent.mailUnread, gameState.parent.mailLog.length));
+}
+
 function addMail(title, text, isGold = false) {
+    // Deprecated: mailbox now stores only son's letters.
+    if (!isSonMailTitle(title)) return;
     if (!gameState.parent.mailLog || !Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
     gameState.parent.mailLog.unshift({
         title,
         text,
         isGold: !!isGold,
+        source: 'son',
         ts: Date.now()
     });
     if (gameState.parent.mailLog.length > 10) gameState.parent.mailLog = gameState.parent.mailLog.slice(0, 10);
@@ -4655,6 +5019,7 @@ function clearMailUnread() {
 function renderMailbox() {
     if (!els.mailList) return;
     if (!gameState.parent.mailLog || !Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
+    sanitizeMailboxLog();
     const log = gameState.parent.mailLog;
     if (log.length === 0) {
         els.mailList.innerHTML = `<li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">📮 아직 도착한 편지가 없습니다.</li>`;
@@ -4689,18 +5054,183 @@ if (els.mailboxModal) {
 }
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (els.travelModal && els.travelModal.style.display === 'flex') closeTravelModal();
     if (els.mailboxModal && els.mailboxModal.style.display === 'flex') closeMailbox();
+    if (els.questModal && els.questModal.style.display === 'flex') closeRequestsModal();
 });
+
+// ============================================================
+// Travel modal (leave / return) — pauses game time
+// ============================================================
+let travelModalCtx = null; // { defaultId, onResolve, resolved }
+
+function openTravelModal(opts) {
+    if (!els.travelModal) return;
+    pauseGame('travel-modal');
+
+    const title = opts?.title || '아들';
+    const sub = opts?.sub || '';
+    const dialogue = opts?.dialogue || '';
+    const imgSrc = opts?.imgSrc || 'assets/pixel/son_idle.png';
+    const summary = opts?.summary || '';
+    const actions = Array.isArray(opts?.actions) ? opts.actions : [];
+    const defaultId = opts?.defaultId || (actions[0]?.id ?? null);
+    const onResolve = typeof opts?.onResolve === 'function' ? opts.onResolve : null;
+
+    travelModalCtx = { defaultId, onResolve, resolved: false };
+
+    if (els.travelTitle) els.travelTitle.innerText = title;
+    if (els.travelSub) els.travelSub.innerText = sub;
+    if (els.travelDialogue) els.travelDialogue.innerText = dialogue;
+    if (els.travelImg) els.travelImg.src = imgSrc;
+
+    if (els.travelSummary) {
+        if (summary) {
+            els.travelSummary.style.display = 'block';
+            els.travelSummary.innerHTML = summary;
+        } else {
+            els.travelSummary.style.display = 'none';
+            els.travelSummary.innerHTML = '';
+        }
+    }
+
+    if (els.travelActions) {
+        els.travelActions.innerHTML = actions.map(a => {
+            const variant = a.variant === 'secondary' ? 'secondary' : '';
+            return `<button class="action-btn ${variant}" type="button" onclick="resolveTravelModal('${a.id}')">${a.label}</button>`;
+        }).join('');
+    }
+
+    els.travelModal.style.display = 'flex';
+}
+
+function resolveTravelModal(actionId, meta = {}) {
+    if (!travelModalCtx || travelModalCtx.resolved) return;
+    travelModalCtx.resolved = true;
+    const ctx = travelModalCtx;
+    travelModalCtx = null;
+
+    if (els.travelModal) els.travelModal.style.display = 'none';
+    resumeGame();
+
+    if (ctx.onResolve) {
+        try {
+            ctx.onResolve(actionId, meta);
+        } catch (e) {
+            console.error('travel onResolve failed:', e);
+        }
+    }
+}
+window.resolveTravelModal = resolveTravelModal;
+
+function closeTravelModal() {
+    if (!travelModalCtx) {
+        if (els.travelModal) els.travelModal.style.display = 'none';
+        resumeGame();
+        return;
+    }
+    resolveTravelModal(travelModalCtx.defaultId, { auto: true });
+}
+window.closeTravelModal = closeTravelModal;
+
+if (els.travelModal) {
+    els.travelModal.addEventListener('click', (e) => {
+        if (e.target === els.travelModal) closeTravelModal();
+    });
+}
 
 // ============================================================
 // #4 — Dynamic Adventure with Live View + Loot + Encourage
 // ============================================================
 let adventureInterval = null;
+
+function pickOne(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) return '';
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function getSonTone() {
+    const a = gameState.son.affinity || {};
+    const p = gameState.son.personality || {};
+    const affection = Number.isFinite(a.affection) ? a.affection : 50;
+    const trust = Number.isFinite(a.trust) ? a.trust : 50;
+    const rebellion = Number.isFinite(a.rebellion) ? a.rebellion : 0;
+    const bravery = Number.isFinite(p.bravery) ? p.bravery : 50;
+
+    if (rebellion >= 75) return 'cool';
+    if (affection >= 72) return 'sweet';
+    if (trust >= 72) return 'steady';
+    if (bravery >= 72) return 'brave';
+    return 'normal';
+}
+
+function buildDepartureDialogue(plan) {
+    const tone = getSonTone();
+    const zone = plan?.zone;
+    const mission = plan?.mission;
+    const where = zone && mission ? `${zone.name}에서 ${mission.name}` : zone ? zone.name : '밖에서';
+    const lines = {
+        sweet: [
+            `엄마~ 다녀올게요!\n오늘은 ${where} 하고 올게요!`,
+            `엄마 걱정하지 마세요!\n${where} 잠깐만 하고 금방 올게요.`
+        ],
+        steady: [
+            `다녀오겠습니다.\n${where} 수행하고 오겠습니다.`,
+            `계획대로 움직일게요.\n${where} 다녀오겠습니다.`
+        ],
+        cool: [
+            `갔다 올게.\n${where}.`,
+            `나갔다 올게요.\n${where} 좀 보고 올게요.`
+        ],
+        brave: [
+            `엄마! 오늘은 제대로 해볼게요!\n${where} 하고 올게요!`,
+            `고블린이든 뭐든…\n${where} 다녀올게요!`
+        ],
+        normal: [
+            `다녀올게요~\n${where} 하고 올게요.`,
+            `엄마, 잠깐 다녀올게요.\n${where}에요.`
+        ]
+    };
+    return pickOne(lines[tone] || lines.normal);
+}
+
+function buildReturnDialogue(outcome, pct, ctx = {}) {
+    const tone = getSonTone();
+    const injured = !!ctx.injured;
+    const base =
+        outcome === 'great' ? '정말 잘 됐어요!' :
+        outcome === 'success' ? '잘 다녀왔어요!' :
+        outcome === 'partial' ? '조금 아쉬웠지만… 괜찮아요!' :
+        '…미안해요. 생각보다 어려웠어요.';
+    const suffix = injured ? ' 조금 다쳤지만 괜찮아요.' : '';
+    const lines = {
+        sweet: [
+            `엄마~ 다녀왔어요!\n${base} (${pct}%)${suffix}`,
+            `엄마 보고 싶었어요!\n${base} (${pct}%)${suffix}`
+        ],
+        steady: [
+            `귀환했습니다.\n${base} (${pct}%)${suffix}`,
+            `다녀왔습니다.\n${base} (${pct}%)${suffix}`
+        ],
+        cool: [
+            `왔어.\n${base} (${pct}%)${suffix}`,
+            `다녀옴.\n${base} (${pct}%)${suffix}`
+        ],
+        brave: [
+            `엄마! 다녀왔어요!\n${base} (${pct}%)${suffix}`,
+            `헤헤, 나름 해냈어요!\n${base} (${pct}%)${suffix}`
+        ],
+        normal: [
+            `다녀왔어요~\n${base} (${pct}%)${suffix}`,
+            `엄마, 다녀왔어요.\n${base} (${pct}%)${suffix}`
+        ]
+    };
+    return pickOne(lines[tone] || lines.normal);
+}
+
 function startAdventure() {
     gameState.son.state = 'ADVENTURING';
     gameState.son.adventureEncouraged = false;
-    if (els.sprite) els.sprite.style.display = 'none';
-    if (els.btnEncourage) els.btnEncourage.disabled = false;
 
     const plan = planAdventureGoal();
     gameState.son.lastChoice = {
@@ -4711,6 +5241,7 @@ function startAdventure() {
             `${plan.mission?.name || '목표'}`
         ]
     };
+
     const job = getAdventureJobPerks();
     const baseCp = plan.cp;
     const diffKey = plan.diffKey;
@@ -4718,6 +5249,7 @@ function startAdventure() {
     const totalTicks = diff.duration[0] + Math.floor(Math.random() * (diff.duration[1] - diff.duration[0] + 1));
     const appliedBuff = gameState.son.nextAdventureBuff ? normalizeNextAdventureBuff(gameState.son.nextAdventureBuff) : null;
     if (appliedBuff) gameState.son.nextAdventureBuff = null;
+
     gameState.son.adventure = {
         ticks: 0,
         totalTicks,
@@ -4731,37 +5263,75 @@ function startAdventure() {
         mailCount: 0,
         eventsTriggered: { a: false, b: false, c: false },
         buff: appliedBuff,
-        job
+        job,
+        sendoff: null
     };
     gameState.son.plannedGoal = null;
 
-    addMail(
-        "🏃‍♂️ 외출",
-        `아들이 모험을 떠났습니다! (${diff.name})<br>목표: ${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}<br>전투력: ${baseCp} (권장CP ${plan.zone.recCP})<br>🧭 직업: ${job.name}${job.desc ? ` (${job.desc})` : ''}${appliedBuff ? `<br>✨ 적용 버프: ${describeNextAdventureBuff(appliedBuff)}` : ''}`
-    );
-    updateUI();
-
-    // Update scene on first tick
-    updateAdventureScene(0, totalTicks);
-
-    adventureInterval = setInterval(() => {
-        if (!gameState.son.adventure) return;
-        gameState.son.adventure.ticks++;
-        const ticks = gameState.son.adventure.ticks;
-        const total = gameState.son.adventure.totalTicks;
-        // Update progress bar
-        if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
-
-        // Update scene based on tick
-        updateAdventureScene(ticks, total);
-        maybeSendAdventureMail(ticks, total);
-
-        if (ticks >= total) {
-            clearInterval(adventureInterval);
-            adventureInterval = null;
-            completeAdventure();
+    const applySendoffChoice = (choiceId) => {
+        const sendoff = { id: choiceId, goldMul: 1.0, lootMul: 1.0, riskMul: 1.0 };
+        if (choiceId === 'bye_warm') {
+            gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 2, 0, 100);
+            gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 1, 0, 100);
+            gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - 1, 0, 100);
+            sendoff.goldMul = 1.03;
+        } else if (choiceId === 'bye_careful') {
+            gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 2, 0, 100);
+            gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - 2, 0, 100);
+            sendoff.riskMul = 0.92;
+        } else if (choiceId === 'bye_cool') {
+            gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) - 1, 0, 100);
+            gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) + 2, 0, 100);
+            sendoff.lootMul = 1.05;
         }
-    }, 1000);
+        if (gameState.son.adventure) gameState.son.adventure.sendoff = sendoff;
+    };
+
+    const beginAdventureTicks = () => {
+        if (els.sprite) els.sprite.style.display = 'none';
+        if (els.btnEncourage) els.btnEncourage.disabled = false;
+        updateUI();
+        updateAdventureScene(0, totalTicks);
+
+        adventureInterval = setInterval(() => {
+            if (isGamePaused) return;
+            if (!gameState.son.adventure) return;
+            gameState.son.adventure.ticks++;
+            const ticks = gameState.son.adventure.ticks;
+            const total = gameState.son.adventure.totalTicks;
+            if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
+            updateAdventureScene(ticks, total);
+            maybeSendAdventureMail(ticks, total);
+            if (ticks >= total) {
+                clearInterval(adventureInterval);
+                adventureInterval = null;
+                completeAdventure();
+            }
+        }, 1000);
+    };
+
+    const zoneLine = `${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}`;
+    const diffLine = `${diff.name} · 전투력 ${baseCp} (권장CP ${plan.zone.recCP})`;
+    openTravelModal({
+        title: '🏃‍♂️ 출발',
+        sub: `${zoneLine} · ${diffLine}`,
+        imgSrc: 'assets/pixel/son_adventuring.png',
+        dialogue: buildDepartureDialogue(plan),
+        summary: appliedBuff
+            ? `<b>✨ 적용 버프</b>\n${describeNextAdventureBuff(appliedBuff)}\n\n<b>🧭 직업</b>\n${job.name}${job.desc ? ` (${job.desc})` : ''}`
+            : `<b>🧭 직업</b>\n${job.name}${job.desc ? ` (${job.desc})` : ''}`,
+        actions: [
+            { id: 'bye_warm', label: '잘 다녀와' },
+            { id: 'bye_careful', label: '조심해' },
+            { id: 'bye_cool', label: '응(시크하게)', variant: 'secondary' }
+        ],
+        defaultId: 'bye_warm',
+        onResolve: (choiceId) => {
+            applySendoffChoice(choiceId);
+            showToast('🏃‍♂️ 아들이 모험을 떠났습니다.', 'info');
+            beginAdventureTicks();
+        }
+    });
 }
 
 function updateAdventureScene(tick, totalTicks = 60) {
@@ -4849,6 +5419,7 @@ function completeAdventure() {
     const legacyBuff = (!gameState.son.adventure?.buff && !!gameState.son.nextAdventureBuff) ? normalizeNextAdventureBuff(gameState.son.nextAdventureBuff) : null;
     const appliedBuff = normalizeNextAdventureBuff(gameState.son.adventure?.buff || legacyBuff);
     const job = gameState.son.adventure?.job || getAdventureJobPerks();
+    const sendoff = gameState.son.adventure?.sendoff || null;
 
     const injuryRiskMul = gameState.son.injury?.riskMul ?? 1.0;
     const effectiveCp = cp;
@@ -4872,10 +5443,11 @@ function completeAdventure() {
     let finalGold = Math.floor(earnedGold * encourageBonus * rebellionBonus);
     if (appliedBuff?.goldMul) finalGold = Math.floor(finalGold * appliedBuff.goldMul);
     if (job?.goldMul) finalGold = Math.floor(finalGold * job.goldMul);
+    if (sendoff?.goldMul) finalGold = Math.floor(finalGold * sendoff.goldMul);
 
     const lootResults = [];
     const lootPasses = rebellionMaverick ? 2 : 1;
-    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0);
+    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0);
 
     // Core loot table
     for (let pass = 0; pass < lootPasses; pass++) {
@@ -4940,12 +5512,10 @@ function completeAdventure() {
     ensureWorldCodexState();
     const codexResult = recordWorldRun(zone.id, mission.id, outcome, score);
     if (codexResult.firstDiscovery) {
-        addMail("🗺️ 새로운 던전", `아들이 <b>${zone.emoji} ${zone.name}</b>에 대한 소문을 확인했습니다.\n이제 도감에 기록이 남습니다.`);
         showToast(`🗺️ 도감 업데이트: ${zone.name}`, 'info');
     }
     if (codexResult.firstBoss) {
         const boss = zoneBosses[zone.id];
-        addMail("👑 보스 격파 기록", `아들이 <b>${boss?.emoji || '👑'} ${boss?.name || '보스'}</b>를 격파했습니다!`);
         showToast("👑 보스 격파 기록!", 'levelup');
     }
 
@@ -4955,7 +5525,8 @@ function completeAdventure() {
     const defMitigation = 1 / (1 + def * 0.12);
     const buffRiskMul = appliedBuff?.riskMul ?? 1.0;
     const jobRiskMul = job?.riskMul ?? 1.0;
-    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul);
+    const sendoffRiskMul = sendoff?.riskMul ?? 1.0;
+    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul * sendoffRiskMul);
     if (Math.random() < finalRisk) {
         const severityRoll = Math.random();
         const deepFail = score < 0.7 ? 1 : 0;
@@ -4964,24 +5535,15 @@ function completeAdventure() {
             severityRoll < (0.88 - deepFail * 0.05) ? '중상' :
             '심각';
         applyInjury(sev);
-        addMail("🩹 부상", `모험 중 부상을 입었습니다. (${sev})`);
         showToast("🩹 아들이 다쳤습니다...", 'error');
     }
 
     const pct = Math.max(0, Math.min(150, Math.round(score * 100)));
     const outcomeText = outcomeLabel(outcome, pct);
-    let lootMsg = `<b>결과: ${outcomeText}</b><br><b>💰 +${finalGold} 골드</b> | ⭐ +${adventureExp} EXP`;
-    if (lootResults.length > 0) lootMsg += `<br>📦 전리품: ${lootResults.join(', ')}`;
-    if (gameState.son.adventureEncouraged) lootMsg += `<br>💌 응원 보너스 적용! (+20%)`;
-    if (appliedBuff) lootMsg += `<br>✨ 버프 적용: ${describeNextAdventureBuff(appliedBuff)}`;
-    if (job && job.key !== 'neutral') lootMsg += `<br>🧭 직업 특성 적용: ${job.name}${job.desc ? ` (${job.desc})` : ''}`;
     if (rebellionMaverick) {
-        lootMsg += `<br>🌟 고집이 발동해 예상 밖의 성과를 냈습니다.`;
         gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2);
         gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 2);
     }
-    addMail("🏆 귀환 완료!", lootMsg, true);
-    showToast(`귀환! +${finalGold}G ${lootResults.length > 0 ? '+ 전리품 ' + lootResults.length + '종' : ''}`, 'gold');
 
     // Gold pop animation
     els.gold.classList.add('gold-pop');
@@ -4994,6 +5556,65 @@ function completeAdventure() {
 
     checkLevelUp();
     updateUI();
+
+    const zoneLine = `${zone.emoji} ${zone.name} · ${mission.emoji} ${mission.name}`;
+    const diffLine = `${diff.name} · CP ${cp} (권장CP ${zone.recCP})`;
+    const injuryLine = gameState.son.injury
+        ? `🩹 부상: ${gameState.son.injury.label || '부상'} (${gameState.son.injury.severity || ''})`
+        : `🩹 부상 없음`;
+    const lootLine = lootResults.length ? `📦 전리품: ${lootResults.join(', ')}` : `📦 전리품 없음`;
+    const sendoffLine =
+        sendoff?.id === 'bye_warm' ? '👋 인사: 잘 다녀와 (골드 약간 증가)' :
+        sendoff?.id === 'bye_careful' ? '👋 인사: 조심해 (부상 위험 감소)' :
+        sendoff?.id === 'bye_cool' ? '👋 인사: 응(시크하게) (전리품 약간 증가)' :
+        '';
+    const buffLine = appliedBuff ? `✨ 버프: ${describeNextAdventureBuff(appliedBuff)}` : '';
+    const jobLine = job ? `🧭 직업: ${job.name}${job.desc ? ` (${job.desc})` : ''}` : '';
+    const encourageLine = gameState.son.adventureEncouraged ? '💌 응원 보너스: 적용(+20%)' : '';
+    const maverickLine = rebellionMaverick ? '🌟 고집이 발동해 예상 밖의 성과를 냈습니다.' : '';
+
+    const summaryLines = [
+        `<b>결과</b>\n${outcomeText}`,
+        `<b>보상</b>\n💰 +${finalGold}G · ⭐ +${adventureExp} EXP`,
+        lootLine,
+        injuryLine,
+        encourageLine,
+        buffLine,
+        jobLine,
+        sendoffLine,
+        maverickLine
+    ].filter(Boolean).join('\n\n');
+
+    openTravelModal({
+        title: '🏠 귀환',
+        sub: `${zoneLine} · ${diffLine}`,
+        imgSrc: 'assets/pixel/son_idle.png',
+        dialogue: buildReturnDialogue(outcome, pct, { injured: !!gameState.son.injury }),
+        summary: summaryLines,
+        actions: [
+            { id: 'welcome_praise', label: '고생했어~' },
+            { id: 'welcome_check', label: '잘 다녀왔어?' },
+            { id: 'welcome_food', label: '얼른 씻고 밥먹어', variant: 'secondary' }
+        ],
+        defaultId: 'welcome_praise',
+        onResolve: (choiceId) => {
+            if (choiceId === 'welcome_praise') {
+                gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 2, 0, 100);
+                gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 1, 0, 100);
+                gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - 2, 0, 100);
+                sonSpeech("헤헤… 고마워요!");
+            } else if (choiceId === 'welcome_check') {
+                gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 2, 0, 100);
+                gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 1, 0, 100);
+                sonSpeech("응! 괜찮아!");
+            } else if (choiceId === 'welcome_food') {
+                gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 1, 0, 100);
+                gameState.son.personality.diligence = clampInt((gameState.son.personality.diligence || 50) + 1, 0, 100);
+                sonSpeech("알겠어요…!");
+            }
+            updateUI();
+        }
+    });
 }
 
 // ============================================================
@@ -5162,7 +5783,6 @@ function sonAI() {
   try {
     // 1. Adventuring
     if (gameState.son.state === 'ADVENTURING') {
-        if (gameState.son.quest) handleQuestTick();
         return;
     }
 
@@ -5183,14 +5803,11 @@ function sonAI() {
         if (gameState.son.hp < 0) gameState.son.hp = 0;
         if (gameState.son.hunger < 0) gameState.son.hunger = 0;
         checkLevelUp();
-        if (gameState.son.quest) handleQuestTick();
         updateUI();
         return;
     }
 
     // 3. Decision making
-    if (gameState.son.quest) handleQuestTick();
-
     // #1 fix: Adventure only when 80% AND mom isn't touching the wardrobe
     if (gameState.son.hp >= (gameState.son.maxHp * 0.8) && gameState.son.hunger >= (gameState.son.maxHunger * 0.8)) {
         if (!isWardrobeLocked()) {
@@ -5199,7 +5816,7 @@ function sonAI() {
         }
     }
 
-    triggerRandomQuest();
+    triggerRandomRequest();
 
     // Passive hunger/hp drain when idle
     const injuryDrainIdle = gameState.son.injury?.hungerDrain ?? 0;
@@ -5580,7 +6197,7 @@ const loaded = loadGame();
 if (!loaded) {
     // #1 Fix: Son starts with lower HP/hunger, needing care before first adventure
     sonSpeech("엄마... 배고프고 졸려요...");
-    addMail("📖 시작", "아들이 피곤하고 배고파합니다. 밥을 차리고 침대를 마련해주세요!");
+    showToast("📖 시작: 밥을 차리고 침대를 마련해주세요!", 'info');
 } else {
     showToast("💾 저장 데이터를 불러왔습니다.", 'success');
 }
@@ -5593,10 +6210,12 @@ window.addEventListener('beforeunload', () => saveGame());
 
 // Main game loop (1 second)
 setInterval(() => {
+    if (isGamePaused) return;
     gameState.worldTick = Math.max(0, Math.floor((gameState.worldTick || 0) + 1));
     updateBookstoreRotation();
     sonAI();
     injuryTick();
+    requestsTick();
     workTick();
     farmTick();
     kitchenTick();

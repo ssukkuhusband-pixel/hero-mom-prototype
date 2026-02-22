@@ -541,6 +541,73 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
 #inv-modal { z-index: 120; }
 #furn-modal { z-index: 125; }
 #quest-modal { z-index: 130; }
+#travel-modal { z-index: 140; }
+
+/* Travel modal (leave/return) */
+.travel-modal-content {
+    width: 92%;
+    max-width: 420px;
+    text-align: left;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    max-height: 86vh;
+    overflow: hidden;
+}
+.travel-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.travel-portrait {
+    flex: 0 0 auto;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.travel-portrait img {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
+}
+.travel-dialogue {
+    flex: 1 1 auto;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-weight: 1000;
+    color: #0f172a;
+    line-height: 1.35;
+    white-space: pre-line;
+}
+.travel-summary {
+    margin-top: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: 0.82rem;
+    color: #0f172a;
+    overflow: auto;
+    white-space: pre-line;
+}
+.travel-actions {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+.travel-actions .action-btn {
+    width: 100%;
+    margin-top: 0;
+}
 
 /* Furniture swap modal */
 .furn-modal-content {
