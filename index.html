@@ -427,13 +427,12 @@
                         </div>
                         <div class="town-subtabs" id="town-subtabs" style="display:none;"></div>
                         <div class="town-detail-body">
-	                    <div class="sys-content active" id="sys-work">
-	                        <h3 style="margin-bottom:5px;">집안일 (부업)</h3>
-	                        <p style="font-size:0.85rem; margin-bottom:10px;">아들 몰래 인형 눈알을 붙여 용돈을 법니다.</p>
-	                        <div class="hint-card" style="margin-top:8px; margin-bottom:10px;">
-	                            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-	                                <b>🪡 부업 숙련</b>
-	                                <span style="font-weight:900; color:#0f172a;">Lv.<span id="work-lv">1</span></span>
+		                    <div class="sys-content active" id="sys-work">
+		                        <h3 style="margin-bottom:5px;">🪡 부업</h3>
+		                        <div class="hint-card" style="margin-top:8px; margin-bottom:10px;">
+		                            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+		                                <b>🪡 부업 숙련</b>
+		                                <span style="font-weight:900; color:#0f172a;">Lv.<span id="work-lv">1</span></span>
 	                            </div>
 	                            <div class="bar-bg" style="height:10px; margin-top:10px;">
 	                                <div class="bar exp" id="work-xp-bar" style="width:0%"></div>
@@ -442,40 +441,39 @@
 	                                <span>숙련도 <b><span id="work-xp-text">0/8</span></b></span>
 	                                <span>💤 에너지 <b><span id="work-energy-text">0/0</span></b> · 다음 회복 <b><span id="work-energy-next">-</span></b></span>
 	                            </div>
-	                            <div class="bar-bg" style="height:10px; margin-top:8px;">
-	                                <div class="bar energy" id="work-energy-bar" style="width:0%"></div>
-	                            </div>
-	                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">부업을 많이 할수록, 한 번에 버는 골드가 아주 조금씩 늘어납니다. 대신 에너지가 필요해요.</div>
-	                        </div>
-	                        <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.1rem;">🪡 바느질 하기</button>
-	                    </div>
-	                    <div class="sys-content" id="sys-shop">
-	                        <h3 style="margin-bottom:5px;">상점 (아이템 구매)</h3>
-	                        <p style="font-size:0.85rem; margin-bottom:10px;">필요한 도구/재료를 미리 준비해두세요.</p>
-	                        <div class="segmented" style="margin-top:8px;">
-	                            <button class="seg-btn active" data-shop-tab="grocery" onclick="setShopTab('grocery')">🥕 식료품점</button>
-	                            <button class="seg-btn" data-shop-tab="general" onclick="setShopTab('general')">🧺 잡화점</button>
-	                            <button class="seg-btn" data-shop-tab="book" onclick="setShopTab('book')">📚 서점</button>
+		                            <div class="bar-bg" style="height:10px; margin-top:8px;">
+		                                <div class="bar energy" id="work-energy-bar" style="width:0%"></div>
+		                            </div>
+		                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">💡 숙련 ↑ = 보상 ↑ · 에너지 필요</div>
+		                        </div>
+		                        <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.1rem;">🪡 바느질 하기</button>
+		                    </div>
+		                    <div class="sys-content" id="sys-shop">
+		                        <h3 style="margin-bottom:5px;">🛒 상점</h3>
+		                        <div class="segmented" style="margin-top:8px;">
+		                            <button class="seg-btn active" data-shop-tab="grocery" onclick="setShopTab('grocery')">🥕 식료품점</button>
+		                            <button class="seg-btn" data-shop-tab="general" onclick="setShopTab('general')">🧺 잡화점</button>
+		                            <button class="seg-btn" data-shop-tab="book" onclick="setShopTab('book')">📚 서점</button>
 	                        </div>
 
 	                        <div class="shop-tab active" id="shop-tab-grocery">
 			                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
 			                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🍳 요리 재료</h4>
-			                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
-			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('meat', 60, 1)">🥩 고기 (60G)</button>
-			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('salt', 15, 1)">🧂 소금 (15G)</button>
-		                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('carrot', 20, 1)">🥕 당근 (20G)</button>
-			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('tomato', 25, 1)">🍅 토마토 (25G)</button>
-			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('herb', 35, 1)">🌿 약초 (35G)</button>
-			                            </div>
-			                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">구매한 재료는 <b>집(텃밭/주방)</b>에서 요리에 사용됩니다.</div>
-			                        </div>
-	                        </div>
+				                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+				                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('meat', 60, 1)">🥩 고기 (60G)</button>
+				                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('salt', 15, 1)">🧂 소금 (15G)</button>
+			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('carrot', 20, 1)">🥕 당근 (20G)</button>
+				                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('tomato', 25, 1)">🍅 토마토 (25G)</button>
+				                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('herb', 35, 1)">🌿 약초 (35G)</button>
+				                            </div>
+				                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">🏠 집(주방) 요리에 사용</div>
+				                        </div>
+		                        </div>
 
-	                        <div class="shop-tab" id="shop-tab-general">
-	                            <div style="display:grid; grid-template-columns: 1fr; gap:10px; margin-top:12px;">
-	                                <button class="action-btn" style="background:#f59e0b; margin-top:0;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니 (200G) - 훈련효율업</button>
-	                            </div>
+		                        <div class="shop-tab" id="shop-tab-general">
+		                            <div style="display:grid; grid-template-columns: 1fr; gap:10px; margin-top:12px;">
+		                                <button class="action-btn" style="background:#f59e0b; margin-top:0;" onclick="buyItem('sandbag', 200)" title="훈련 도구 슬롯에 배치하면 효율이 올라요.">🏋️ 모래주머니 (200G)</button>
+		                            </div>
 			                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
 			                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🌱 씨앗</h4>
 			                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
@@ -499,12 +497,17 @@
 	                                <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="buyMaterial('steel', 80, 1)">🪨 강철 (80G)</button>
 	                            </div>
 	                        </div>
-	                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
-	                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🏠 가구 상점 (모델)</h4>
-	                            <p style="font-size:0.8rem; color:#64748b; margin-bottom:10px;">구매한 가구 모델은 사라지지 않으며, 집에서 언제든 교체할 수 있어요. 강화는 슬롯 강화라 교체해도 유지됩니다.</p>
-	                            <div id="furn-shop"></div>
-	                        </div>
-	                        </div>
+		                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+		                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🏠 가구 상점 (모델)</h4>
+		                            <details class="fold" style="margin-bottom:10px;">
+		                                <summary>ℹ️ 안내</summary>
+		                                <div style="margin-top:8px; font-size:0.8rem; color:#64748b; line-height:1.35;">
+		                                    구매한 가구 모델은 사라지지 않으며, 집에서 언제든 교체할 수 있어요. 강화는 슬롯 강화라 교체해도 유지됩니다.
+		                                </div>
+		                            </details>
+		                            <div id="furn-shop"></div>
+		                        </div>
+		                        </div>
 
 	                        <div class="shop-tab" id="shop-tab-book">
 	                            <div class="hint-card" style="margin-top:12px;">
@@ -523,13 +526,12 @@
 	                            </div>
 	                        </div>
 	                    </div>
-			                    <div class="sys-content" id="sys-smith">
-			                        <h3 id="smithy-h3">대장간</h3>
-			                        <p style="font-size:0.85rem; margin-bottom:10px;">뽑기/합성/제작으로 아들의 다음 모험을 준비하세요.</p>
-			                        <div class="segmented" style="margin-top:8px;">
-			                            <button class="seg-btn active" data-smith-tab="gacha" onclick="setSmithyTab('gacha')">🎲 뽑기</button>
-			                            <button class="seg-btn" data-smith-tab="synth" onclick="setSmithyTab('synth')">🧱 합성</button>
-			                            <button class="seg-btn" data-smith-tab="craft" onclick="setSmithyTab('craft')">✨ 제작</button>
+				                    <div class="sys-content" id="sys-smith">
+				                        <h3 id="smithy-h3">대장간</h3>
+				                        <div class="segmented" style="margin-top:8px;">
+				                            <button class="seg-btn active" data-smith-tab="gacha" onclick="setSmithyTab('gacha')">🎲 뽑기</button>
+				                            <button class="seg-btn" data-smith-tab="synth" onclick="setSmithyTab('synth')">🧱 합성</button>
+				                            <button class="seg-btn" data-smith-tab="craft" onclick="setSmithyTab('craft')">✨ 제작</button>
 		                        </div>
 
 			                        <div class="smith-tab active" id="smith-tab-gacha">
@@ -548,32 +550,32 @@
 		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">뽑기를 많이 할수록, 더 좋은 무기가 나올 확률이 조금씩 올라갑니다.</div>
 			                                <div id="smith-buff-text" style="margin-top:6px; font-size:0.78rem; color:#0ea5e9; font-weight:900;"></div>
 			                            </div>
-			                            <div class="hint-card" style="margin-top:10px; margin-bottom:10px;">
-			                                <b>해금</b>
-			                                <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; font-size:0.8rem;">
-			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
-			                                        <span>🧱 숙련 교환</span><span id="unlock-exchange-state" style="font-weight:900; color:#94a3b8;">Lv.3 필요</span>
-			                                    </div>
-			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
-			                                        <span>🎲 고급 뽑기</span><span id="unlock-premium-state" style="font-weight:900; color:#94a3b8;">Lv.5 필요</span>
-			                                    </div>
-			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
-			                                        <span>✨ 정련(행운)</span><span id="unlock-temper-state" style="font-weight:900; color:#94a3b8;">Lv.7 필요</span>
-			                                    </div>
-			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
-			                                        <span>📜 특별 주문</span><span id="unlock-order-state" style="font-weight:900; color:#94a3b8;">Lv.10 필요</span>
-			                                    </div>
-			                                </div>
-			                            </div>
+				                            <details class="fold" style="margin-top:10px; margin-bottom:10px;">
+				                                <summary>🔓 해금</summary>
+				                                <div style="margin-top:10px; display:flex; flex-direction:column; gap:6px; font-size:0.8rem;">
+				                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+				                                        <span>🧱 숙련 교환</span><span id="unlock-exchange-state" style="font-weight:900; color:#94a3b8;">Lv.3 필요</span>
+				                                    </div>
+				                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+				                                        <span>🎲 고급 뽑기</span><span id="unlock-premium-state" style="font-weight:900; color:#94a3b8;">Lv.5 필요</span>
+				                                    </div>
+				                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+				                                        <span>✨ 정련(행운)</span><span id="unlock-temper-state" style="font-weight:900; color:#94a3b8;">Lv.7 필요</span>
+				                                    </div>
+				                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+				                                        <span>📜 특별 주문</span><span id="unlock-order-state" style="font-weight:900; color:#94a3b8;">Lv.10 필요</span>
+				                                    </div>
+				                                </div>
+				                            </details>
 			                            <button class="action-btn" id="btn-gacha" style="background-color: #0f172a; margin-top:10px;">🗡️ 무기 뽑기 (500G)</button>
 			                            <button class="action-btn" id="btn-gacha-premium" style="background-color: #8b5cf6; margin-top:8px;" disabled>🎲 고급 무기 뽑기 (1,250G)</button>
 			                            <div id="gacha-result" class="gacha-result" style="margin-bottom: 15px;"></div>
-			                            <div class="hint-card" style="margin-top:10px;">
-		                                <b>고급 서비스</b>
-		                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">정련은 뽑기 운을 올리고, 특별 주문은 고급 무기를 바로 주문합니다.</div>
-		                                <button class="action-btn" id="btn-temper" style="background-color: #0ea5e9; margin-top:10px;" disabled>✨ 정련 (철 조각 8 + 마력 가루 2)</button>
-		                                <button class="action-btn" id="btn-special-order" style="background-color: #f59e0b; color:#1e293b; margin-top:8px;" disabled>📜 특별 주문 (6,000G + 마력 가루 6)</button>
-		                            </div>
+				                            <details class="fold" style="margin-top:10px;">
+				                                <summary>✨ 고급 서비스</summary>
+				                                <div style="margin-top:10px; font-size:0.78rem; color:#64748b;">정련은 뽑기 운을 올리고, 특별 주문은 고급 무기를 바로 주문합니다.</div>
+				                                <button class="action-btn" id="btn-temper" style="background-color: #0ea5e9; margin-top:10px;" disabled>✨ 정련 (철 조각 8 + 마력 가루 2)</button>
+				                                <button class="action-btn" id="btn-special-order" style="background-color: #f59e0b; color:#1e293b; margin-top:8px;" disabled>📜 특별 주문 (6,000G + 마력 가루 6)</button>
+				                            </details>
 		                        </div>
 
 		                        <div class="smith-tab" id="smith-tab-synth">
@@ -583,18 +585,21 @@
 		                                    <!-- Filled dynamically by JS -->
 		                                </div>
 		                            </div>
-		                            <div class="hint-card" style="margin-top:10px;">
-		                                <b>부산물</b>
+			                            <div class="hint-card" style="margin-top:10px;">
+			                                <b>부산물</b>
 		                                <div style="margin-top:6px; font-size:0.82rem; color:#475569; display:flex; justify-content:space-between; gap:10px;">
 		                                    <span>🧩 철 조각: <b><span id="cnt-iron-scrap">0</span></b></span>
 		                                    <span>✨ 마력 가루: <b><span id="cnt-arcane-dust">0</span></b></span>
 		                                </div>
-		                                <div style="margin-top:10px; display:grid; grid-template-columns:1fr; gap:8px;">
-		                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 5, 'steel', 1)">🪨 강철 교환 (철 조각 5 → 강철 1)</button>
-		                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 5, 'magic_crystal', 1)">💎 마법 결정 교환 (마력 가루 5 → 결정 1)</button>
-		                                    <button class="action-btn" id="btn-exchange-steel-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 4, 'steel', 1)" disabled>🪨 숙련 교환 (철 조각 4 → 강철 1)</button>
-		                                    <button class="action-btn" id="btn-exchange-crystal-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 4, 'magic_crystal', 1)" disabled>💎 숙련 교환 (마력 가루 4 → 결정 1)</button>
-		                                </div>
+			                                <div style="margin-top:10px; display:grid; grid-template-columns:1fr; gap:8px;">
+			                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 5, 'steel', 1)">🪨 강철 교환 (철 조각 5 → 강철 1)</button>
+			                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 5, 'magic_crystal', 1)">💎 마법 결정 교환 (마력 가루 5 → 결정 1)</button>
+			                                    <div id="exchange-pro-lock" style="font-size:0.78rem; color:#94a3b8; font-weight:900;">🔒 숙련 교환은 Lv.3부터</div>
+			                                    <div id="exchange-pro-wrap" style="display:none; grid-template-columns:1fr; gap:8px;">
+			                                        <button class="action-btn" id="btn-exchange-steel-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 4, 'steel', 1)" disabled>🪨 숙련 교환 (철 조각 4 → 강철 1)</button>
+			                                        <button class="action-btn" id="btn-exchange-crystal-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 4, 'magic_crystal', 1)" disabled>💎 숙련 교환 (마력 가루 4 → 결정 1)</button>
+			                                    </div>
+			                                </div>
 		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">무기 합성 시 부산물이 생깁니다. 방어구 승급에 보탤 수 있어요.</div>
 		                            </div>
 		                        </div>

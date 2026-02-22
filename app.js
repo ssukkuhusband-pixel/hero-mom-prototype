@@ -5884,6 +5884,15 @@ function updateUI() {
         setUnlockText(unlockTemperEl, 'temper');
         setUnlockText(unlockOrderEl, 'special_order');
 
+        // Pro exchange UI (hide locked buttons to reduce clutter)
+        const exchangeProWrapEl = document.getElementById('exchange-pro-wrap');
+        const exchangeProLockEl = document.getElementById('exchange-pro-lock');
+        if (exchangeProWrapEl || exchangeProLockEl) {
+            const ok = isSmithyUnlocked('exchange_pro');
+            if (exchangeProWrapEl) exchangeProWrapEl.style.display = ok ? 'grid' : 'none';
+            if (exchangeProLockEl) exchangeProLockEl.style.display = ok ? 'none' : 'block';
+        }
+
         // Enable/disable smithy actions based on unlocks + busy state
         setSmithyBusy(gameState.parent.smithy.isBusy);
 
