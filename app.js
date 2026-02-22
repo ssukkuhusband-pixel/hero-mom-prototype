@@ -139,6 +139,7 @@ const DEFAULT_GAME_STATE = {
         hp: 60, maxHp: 100,
         hunger: 50, maxHunger: 100,
         state: 'IDLE', currentRoom: 'room-desk',
+        homeActionCount: 0, // counts completed home actions; used to force adventures after enough routines
         stats: {
             physAtk: 0,
             magicAtk: 0,
@@ -221,6 +222,7 @@ function loadGame() {
         ensureSonUiState();
         ensureSupportPinState();
         ensureMaterialRequestState();
+        ensureSonBehaviorState();
         cleanupLegacyParentSettings();
         ensureRequestState();
         ensureObjectiveState();
@@ -486,6 +488,12 @@ function ensureSupportPinState() {
     const p = gameState.parent.supportPin;
     if (!p) return;
     if (typeof p !== 'object' || !p.type) gameState.parent.supportPin = null;
+}
+
+function ensureSonBehaviorState() {
+    if (!gameState.son || typeof gameState.son !== 'object') gameState.son = {};
+    if (!Number.isFinite(gameState.son.homeActionCount)) gameState.son.homeActionCount = 0;
+    gameState.son.homeActionCount = Math.max(0, Math.floor(gameState.son.homeActionCount));
 }
 
 function ensureMaterialRequestState() {
@@ -5132,6 +5140,7 @@ function updateUI() {
     try {
         ensureFurnitureState();
         ensureSonGrowthState();
+        ensureSonBehaviorState();
         ensureKitchenState();
         ensureShopState();
         ensureLibraryState();
@@ -5556,15 +5565,18 @@ function updateUI() {
         const advInfoEl = document.getElementById('son-adventure-info');
         const advSubEl = document.getElementById('son-adventure-sub');
         if (advInfoEl && advSubEl) {
+            ensureSonBehaviorState();
+            const act = gameState.son.homeActionCount || 0;
+            const actLine = `집 행동 ${Math.min(10, act)}/10`;
             if (gameState.son.state === 'ADVENTURING' && gameState.son.adventure) {
                 const rem = Math.max(0, (gameState.son.adventure.totalTicks || 0) - (gameState.son.adventure.ticks || 0));
                 const range = etaRangeFromRemaining(rem);
                 const lastAgo = Math.max(0, (gameState.son.adventure.ticks || 0) - (gameState.son.adventure.lastContactTick || 0));
                 advInfoEl.innerText = `🏃‍♂️ 외출 중 · 예상 귀환 ${formatMmSs(range.min)}~${formatMmSs(range.max)}`;
-                advSubEl.innerText = `마지막 소식: ${formatLastContact(lastAgo)}`;
+                advSubEl.innerText = `마지막 소식: ${formatLastContact(lastAgo)} · ${actLine}`;
             } else {
                 advInfoEl.innerText = '🏠 집에 있어요';
-                advSubEl.innerText = '배고프거나 피곤하면 엄마를 찾을 거예요.';
+                advSubEl.innerText = `배고프거나 피곤하면 엄마를 찾을 거예요. · ${actLine}`;
             }
         }
 
@@ -6357,6 +6369,8 @@ function buildReturnDialogue(outcome, pct, ctx = {}) {
 }
 
 function startAdventure() {
+    ensureSonBehaviorState();
+    gameState.son.homeActionCount = 0;
     gameState.son.state = 'ADVENTURING';
     gameState.son.adventureEncouraged = false;
 
@@ -7081,6 +7095,9 @@ function handleActionCompletion() {
         gameState.son.personality.bravery = clampInt(gameState.son.personality.bravery - 1, 0, 100);
         maybeTriggerUnexpectedGrowthHome('RESTING');
     }
+    // Count one completed home action (including “아무것도 안 할래!” idle timer).
+    ensureSonBehaviorState();
+    gameState.son.homeActionCount = Math.min(999, (gameState.son.homeActionCount || 0) + 1);
     gameState.son.state = 'IDLE';
 }
 
@@ -7166,8 +7183,38 @@ function sonAI() {
     }
 
     // 3. Decision making
-    // #1 fix: Adventure only when 80% AND mom isn't touching the wardrobe
-    if (gameState.son.hp >= (gameState.son.maxHp * 0.8) && gameState.son.hunger >= (gameState.son.maxHunger * 0.8)) {
+    // Rule: after enough routines at home, the son will prepare and 반드시 모험을 떠납니다 (when ready).
+    ensureSonBehaviorState();
+    const forcedByActions = (gameState.son.homeActionCount || 0) >= 10;
+    const hpReady = gameState.son.hp >= (gameState.son.maxHp * 0.8);
+    const hungerReady = gameState.son.hunger >= (gameState.son.maxHunger * 0.8);
+
+    if (forcedByActions) {
+        if (hpReady && hungerReady && !isWardrobeLocked()) {
+            startAdventure();
+            return;
+        }
+        // If not ready, focus on topping up to the threshold instead of drifting forever.
+        if (!hpReady) {
+            gameState.son.state = 'SLEEPING';
+            moveToRoom('room-bed');
+            gameState.son.actionTimer = 15;
+            sonSpeech("다음 모험 준비… 잠깐만 잘게요.");
+            updateUI();
+            return;
+        }
+        if (!hungerReady) {
+            gameState.son.state = 'EATING';
+            moveToRoom('room-table');
+            gameState.son.actionTimer = 10;
+            sonSpeech("든든히 먹고 갈게요!");
+            updateUI();
+            return;
+        }
+    }
+
+    // Default: Adventure only when 80% AND mom isn't touching the wardrobe
+    if (hpReady && hungerReady) {
         if (!isWardrobeLocked()) {
             startAdventure();
             return;
