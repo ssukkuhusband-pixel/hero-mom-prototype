@@ -243,12 +243,12 @@
             <section class="view" id="view-son">
                 <div class="panel-scroll">
 	                    <div class="panel-section" id="sys-son">
-	                        <h3 style="margin-bottom:5px;">아들 프로필</h3>
-	                        <div class="segmented" style="margin-top:8px;">
-	                            <button class="seg-btn active" data-son-tab="summary" onclick="setSonTab('summary')">🧾 요약</button>
-	                            <button class="seg-btn" data-son-tab="gear" onclick="setSonTab('gear')">🎒 장비</button>
-	                            <button class="seg-btn" data-son-tab="world" onclick="setSonTab('world')">🗺️ 세계</button>
-	                        </div>
+		                        <h3 style="margin-bottom:5px;">아들 프로필</h3>
+		                        <div class="segmented" style="margin-top:8px;">
+		                            <button class="seg-btn active" data-son-tab="summary" onclick="setSonTab('summary')">🧾 요약 <span class="seg-badge" id="son-badge-network" style="display:none;">0</span></button>
+		                            <button class="seg-btn" data-son-tab="gear" onclick="setSonTab('gear')">🎒 장비</button>
+		                            <button class="seg-btn" data-son-tab="world" onclick="setSonTab('world')">🗺️ 세계 <span class="seg-badge" id="son-badge-world" style="display:none;">0</span></button>
+		                        </div>
 
 		                        <div class="son-tab active" id="son-tab-summary">
 		                            
@@ -320,7 +320,7 @@
 		                                </details>
 		                            </div>
 		
-		                            <details class="fold" style="margin-top:10px;">
+		                            <details class="fold" id="son-growth-details" style="margin-top:10px;">
 		                                <summary>🧬 성장 정보(성향/직업/인맥)</summary>
 		                                <div class="hint-card" style="margin-top:10px;">
 		                                    <b>성향</b>

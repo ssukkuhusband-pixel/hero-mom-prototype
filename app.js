@@ -92,16 +92,17 @@ function deepClone(obj) {
 const SAVE_KEY = 'hero_mom_2_save_v1';
 const DEFAULT_GAME_STATE = {
     worldTick: 0,
-	    parent: {
-	        gold: 500,
-	        audio: { bgmEnabled: true, bgmVolume: 0.22 },
-	        smithy: { level: 1, xp: 0 },
-	        mailUnread: 0,
-	        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
-	        supportPin: null, // { type, ... }
-	        uiLocks: { wardrobe: false },
-        shop: { uiTab: 'grocery' },
-        work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
+		    parent: {
+		        gold: 500,
+		        audio: { bgmEnabled: true, bgmVolume: 0.22 },
+		        smithy: { level: 1, xp: 0 },
+		        mailUnread: 0,
+		        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
+		        uiBadges: { world: 0, network: 0 }, // unseen updates for Son tab
+		        supportPin: null, // { type, ... }
+		        uiLocks: { wardrobe: false },
+	        shop: { uiTab: 'grocery' },
+	        work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
         worldCodex: { zones: {} },
         bossSeals: {}, // { [zoneId]: true }
         furniture: {
@@ -259,6 +260,7 @@ function loadGame() {
         ensureWorldCodexState();
         ensureBossSealState();
         ensureSonUiState();
+        ensureUiBadgeState();
         ensureSupportPinState();
         ensureMaterialRequestState();
         ensureSonBehaviorState();
@@ -631,6 +633,42 @@ function ensureSonUiState() {
     }
 }
 
+function ensureUiBadgeState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!gameState.parent.uiBadges || typeof gameState.parent.uiBadges !== 'object') {
+        gameState.parent.uiBadges = { world: 0, network: 0 };
+    }
+    const b = gameState.parent.uiBadges;
+    if (!Number.isFinite(b.world)) b.world = 0;
+    if (!Number.isFinite(b.network)) b.network = 0;
+    b.world = clampInt(b.world, 0, 99);
+    b.network = clampInt(b.network, 0, 99);
+}
+
+function noteSonUiUpdate(kind, amount = 1) {
+    ensureUiBadgeState();
+    const k = (kind === 'world' || kind === 'network') ? kind : null;
+    if (!k) return;
+    const tab = gameState.parent.sonUiTab || 'summary';
+    // Badges represent unseen updates.
+    if (k === 'world' && tab === 'world') return;
+    if (k === 'network') {
+        const growth = document.getElementById('son-growth-details');
+        if (growth && growth.open) return;
+    }
+    gameState.parent.uiBadges[k] = clampInt((gameState.parent.uiBadges[k] || 0) + (amount || 1), 0, 99);
+    saveGame();
+}
+
+function clearSonUiUpdate(kind) {
+    ensureUiBadgeState();
+    const k = (kind === 'world' || kind === 'network') ? kind : null;
+    if (!k) return;
+    if ((gameState.parent.uiBadges[k] || 0) === 0) return;
+    gameState.parent.uiBadges[k] = 0;
+    saveGame();
+}
+
 function ensureSupportPinState() {
     if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
     if (!('supportPin' in gameState.parent)) gameState.parent.supportPin = null;
@@ -704,6 +742,7 @@ function upsertNetworkContact(contact) {
     } else {
         n.contacts.unshift(next);
         if (n.contacts.length > 20) n.contacts = n.contacts.slice(0, 20);
+        noteSonUiUpdate('network', 1);
     }
     return true;
 }
@@ -3783,6 +3822,8 @@ function setSonTab(tabKey) {
     const t = (tabKey === 'gear' || tabKey === 'world') ? tabKey : 'summary';
     gameState.parent.sonUiTab = t;
     applySonTabUI();
+    if (t === 'world') clearSonUiUpdate('world');
+    if (t === 'summary') clearSonUiUpdate('network');
     updateUI();
 }
 window.setSonTab = setSonTab;
@@ -5965,6 +6006,25 @@ function updateUI() {
             }
         }
 
+        // Son tab badges (unseen updates)
+        (function updateSonBadges() {
+            ensureUiBadgeState();
+            const set = (id, n) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const v = clampInt(n || 0, 0, 99);
+                if (v <= 0) {
+                    el.style.display = 'none';
+                    el.innerText = '';
+                    return;
+                }
+                el.style.display = 'inline-flex';
+                el.innerText = v > 9 ? '9+' : String(v);
+            };
+            set('son-badge-world', gameState.parent.uiBadges.world);
+            set('son-badge-network', gameState.parent.uiBadges.network);
+        })();
+
         // Smith byproducts
         const ironScrapEl = document.getElementById('cnt-iron-scrap');
         const arcaneDustEl = document.getElementById('cnt-arcane-dust');
@@ -6545,6 +6605,17 @@ document.addEventListener('keydown', (e) => {
     if (els.matReqModal && els.matReqModal.style.display === 'flex') closeMaterialRequestModal();
     if (els.questModal && els.questModal.style.display === 'flex') closeRequestsModal();
 });
+
+// Clear "인맥" badge when the player actually opens the growth/network section.
+const sonGrowthDetails = document.getElementById('son-growth-details');
+if (sonGrowthDetails) {
+    sonGrowthDetails.addEventListener('toggle', () => {
+        if (sonGrowthDetails.open) {
+            clearSonUiUpdate('network');
+            updateUI();
+        }
+    });
+}
 
 // ============================================================
 // Travel modal (leave / return) — pauses game time
@@ -7899,10 +7970,12 @@ function completeAdventure() {
     const codexResult = recordWorldRun(zone.id, mission.id, outcome, score);
     if (codexResult.firstDiscovery) {
         showToast(`🗺️ 도감 업데이트: ${zone.name}`, 'info');
+        noteSonUiUpdate('world', 1);
     }
     if (codexResult.firstBoss) {
         const boss = zoneBosses[zone.id];
         showToast("👑 보스 격파 기록!", 'levelup');
+        noteSonUiUpdate('world', 1);
     }
 
     // Injury roll
