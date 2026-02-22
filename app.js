@@ -5465,12 +5465,16 @@ function sanitizeMailboxLog() {
 function addMail(title, text, isGold = false) {
     // Deprecated: mailbox now stores only son's letters.
     if (!isSonMailTitle(title)) return;
+    const opts = (isGold && typeof isGold === 'object') ? isGold : null;
+    const isGoldFlag = (typeof isGold === 'boolean') ? isGold : !!(opts && opts.isGold);
+    const img = (opts && typeof opts.img === 'string' && opts.img.trim()) ? opts.img.trim() : null;
     if (!gameState.parent.mailLog || !Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
     gameState.parent.mailLog.unshift({
         title,
         text,
-        isGold: !!isGold,
+        isGold: !!isGoldFlag,
         source: 'son',
+        img,
         ts: Date.now()
     });
     if (gameState.parent.mailLog.length > 10) gameState.parent.mailLog = gameState.parent.mailLog.slice(0, 10);
@@ -5497,9 +5501,11 @@ function renderMailbox() {
     }
     els.mailList.innerHTML = log.map(m => {
         const color = m.isGold ? '#eab308' : '#334155';
+        const imgHtml = m.img ? `<div style="margin-top:8px;"><img class="mail-img" src="${m.img}" alt="첨부 이미지"></div>` : '';
         return `<li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:6px;">
             <strong style="color:${color}">${m.title}</strong><br>
             <span style="font-size:0.85rem">${m.text}</span>
+            ${imgHtml}
         </li>`;
     }).join('');
 }
@@ -5979,7 +5985,8 @@ function startAdventure() {
         eventsTriggered: { a: false, b: false, c: false },
         buff: appliedBuff,
         job,
-        sendoff: null
+        sendoff: null,
+        photosSent: {}
     };
     gameState.son.plannedGoal = null;
 
@@ -6063,11 +6070,110 @@ function updateAdventureScene(tick, totalTicks = 60) {
     }
 }
 
+// Photo mails (warm/casual/sentimental). Images are generated from assets/reference/son_refer.png.
+const sonPhotoMails = [
+    {
+        id: 'mail01_goblin',
+        zoneId: 'forest',
+        missionId: 'hunt',
+        img: 'assets/mail/mail01_goblin.jpg',
+        title: '📮 사진: 고블린!',
+        text: '엄마! 내가 잡은 고블린 보세요! 😳\n(엄청 무섭진 않았어요… 진짜로!)'
+    },
+    {
+        id: 'mail02_camp',
+        zoneId: 'meadow',
+        missionId: 'gather',
+        img: 'assets/mail/mail02_camp.jpg',
+        title: '📮 사진: 야영',
+        text: '엄마, 오늘은 별이 예뻐요.\n따뜻한 모닥불 피워두고 잠깐 쉬고 있어요.'
+    },
+    {
+        id: 'mail03_relic',
+        zoneId: 'ruins',
+        missionId: 'gather',
+        img: 'assets/mail/mail03_relic.jpg',
+        title: '📮 사진: 반짝이는 유물',
+        text: '엄마! 땅에서 반짝이는 걸 주웠어요.\n왠지… 엄마한테 보여주고 싶었어요.'
+    },
+    {
+        id: 'mail04_kindness',
+        zoneId: 'meadow',
+        missionId: 'hunt',
+        img: 'assets/mail/mail04_kindness.jpg',
+        title: '📮 사진: 작은 친구',
+        text: '엄마, 길에서 다친 친구를 만났어요.\n조금 도와줬더니 고개를 끄덕였어요.'
+    },
+    {
+        id: 'mail05_mountain',
+        zoneId: 'mountain',
+        missionId: 'hunt',
+        img: 'assets/mail/mail05_mountain.jpg',
+        title: '📮 사진: 바람 산맥',
+        text: '여기 바람이 엄청 세요!\n그래도 하늘이 너무 예뻐서… 잠깐 멈췄어요.'
+    },
+    {
+        id: 'mail06_guardian',
+        zoneId: 'ruins',
+        missionId: 'boss',
+        img: 'assets/mail/mail06_guardian.jpg',
+        title: '📮 사진: 수호자',
+        text: '엄마… 방금 큰 녀석을 만났어요.\n그래도 괜찮아요. 난… 할 수 있어요!'
+    },
+    {
+        id: 'mail07_soup',
+        zoneId: 'forest',
+        missionId: 'gather',
+        img: 'assets/mail/mail07_soup.jpg',
+        title: '📮 사진: 따뜻한 한 그릇',
+        text: '엄마가 해준 것만큼은 아니지만…\n따뜻한 걸 먹으니까 힘이 나요.'
+    },
+    {
+        id: 'mail08_wolf',
+        zoneId: 'forest',
+        missionId: 'gather',
+        img: 'assets/mail/mail08_wolf.jpg',
+        title: '📮 사진: 늑대 친구',
+        text: '엄마! 길에서 늑대를 만났는데…\n이상하게 무섭지 않았어요. (잠깐이지만요!)'
+    },
+    {
+        id: 'mail09_smile',
+        zoneId: 'meadow',
+        missionId: 'hunt',
+        img: 'assets/mail/mail09_smile.jpg',
+        title: '📮 사진: 엄마 생각',
+        text: '엄마 생각나서 사진 보내요.\n돌아가면 꼭 안아줘요!'
+    },
+    {
+        id: 'mail10_dragon',
+        zoneId: 'dragon_lair',
+        missionId: 'boss',
+        img: 'assets/mail/mail10_dragon.jpg',
+        title: '📮 사진: 멀리서 본 고룡',
+        text: '엄마… 저 멀리서 진짜 큰 걸 봤어요.\n조금 무서웠지만, 눈을 못 떼겠더라고요.'
+    }
+];
+
+function pickPhotoMailForAdventure(adv) {
+    const zoneId = adv?.zoneId;
+    const missionId = adv?.missionId;
+    const candidates = sonPhotoMails.filter(m =>
+        (!m.zoneId || m.zoneId === zoneId) &&
+        (!m.missionId || m.missionId === missionId)
+    );
+    const pool = candidates.length ? candidates : sonPhotoMails;
+    const sent = adv?.photosSent || {};
+    const filtered = pool.filter(m => !sent[m.id]);
+    const pickFrom = filtered.length ? filtered : pool;
+    return pickFrom[Math.floor(Math.random() * pickFrom.length)];
+}
+
 function maybeSendAdventureMail(ticks, totalTicks) {
     if (gameState.son.state !== 'ADVENTURING') return;
     if (!gameState.son.adventure) return;
     const adv = gameState.son.adventure;
     if (adv.mailCount >= 2) return;
+    if (!adv.photosSent || typeof adv.photosSent !== 'object') adv.photosSent = {};
 
     const marks = [
         { key: 'a', at: Math.floor(totalTicks * 0.22) },
@@ -6098,15 +6204,34 @@ function maybeSendAdventureMail(ticks, totalTicks) {
 
     const zone = getZoneById(adv.zoneId);
     const mission = getMissionById(adv.missionId);
-    const templates = [
-        `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
-        `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
-        `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
-        `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
-        `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
-    ];
-    const msg = templates[Math.floor(Math.random() * templates.length)];
-    addMail("📮 안부 편지", msg);
+    // Sometimes attach an image for extra emotion.
+    if (Math.random() < 0.38) {
+        const p = pickPhotoMailForAdventure(adv);
+        if (p) {
+            adv.photosSent[p.id] = true;
+            addMail(p.title, String(p.text || '').replace(/\n/g, '<br>'), { img: p.img });
+        } else {
+            const templates = [
+                `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
+                `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
+                `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
+                `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
+                `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
+            ];
+            const msg = templates[Math.floor(Math.random() * templates.length)];
+            addMail("📮 안부 편지", msg);
+        }
+    } else {
+        const templates = [
+            `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
+            `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
+            `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
+            `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
+            `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
+        ];
+        const msg = templates[Math.floor(Math.random() * templates.length)];
+        addMail("📮 안부 편지", msg);
+    }
     adv.lastContactTick = ticks;
     adv.mailCount++;
     showToast("📮 아들의 소식이 도착했습니다!", 'info');
