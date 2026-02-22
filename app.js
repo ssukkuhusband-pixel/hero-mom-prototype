@@ -1723,6 +1723,9 @@ const els = {
     requestList: document.getElementById('request-list'),
     debugModal: document.getElementById('debug-modal'),
     debugContent: document.getElementById('debug-content'),
+    settingsModal: document.getElementById('settings-modal'),
+    corePill: document.getElementById('core-pill'),
+    corePillText: document.getElementById('core-pill-text'),
     sonStateLabel: document.getElementById('son-state-label'),
     btnEncourage: document.getElementById('btn-encourage'),
     farmGrid: document.getElementById('farm-grid'),
@@ -6071,22 +6074,40 @@ function updateUI() {
         // Next goal preview (son & mail panels)
         const nextGoalEl = document.getElementById('next-goal');
         const nextGoalSubEl = document.getElementById('next-goal-sub');
-        if (nextGoalEl) {
-            const plan = planAdventureGoal();
-            const objective = plan.objective || gameState.son.objective;
-            const label = `${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}`;
-            const diffName = (difficultyData[plan.diffKey] || difficultyData.normal).name;
-            const diffLabel = `${diffName} (아들 선택)`;
-            const score = plan.cp / plan.zone.recCP;
-            const riskHint = score >= 1.1 ? '안정적' : score >= 0.9 ? '도전적' : '무리할 수도…';
-            if (nextGoalEl) nextGoalEl.innerText = label;
-            const sub = `${diffLabel} · 권장CP ${plan.zone.recCP} · 내 CP ${plan.cp} · ${riskHint}`;
-            if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
+            if (nextGoalEl) {
+                const plan = planAdventureGoal();
+                const objective = plan.objective || gameState.son.objective;
+                const label = `${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}`;
+                const diffName = (difficultyData[plan.diffKey] || difficultyData.normal).name;
+                const diffLabel = `${diffName} (아들 선택)`;
+                const score = plan.cp / plan.zone.recCP;
+                const riskHint = score >= 1.1 ? '안정적' : score >= 0.9 ? '도전적' : '무리할 수도…';
+                if (nextGoalEl) nextGoalEl.innerText = label;
+                const sub = `${diffLabel} · 권장CP ${plan.zone.recCP} · 내 CP ${plan.cp} · ${riskHint}`;
+                if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
 
-            // Objective progress + checklist
-            const progEl = document.getElementById('goal-progress');
-            const checklistEl = document.getElementById('goal-checklist');
-            if (progEl) {
+                // Top bar: core material preview for current goal
+                if (els.corePill && els.corePillText) {
+                    const coreKey = pickZoneCoreKey(plan.zone.id);
+                    if (coreKey) {
+                        ensureLootKey(coreKey);
+                        const have = materialHave(coreKey);
+                        const nm = gameState.parent.loot[coreKey]?.name || coreKey;
+                        const emoji = String(nm).split(' ')[0] || '🎁';
+                        els.corePillText.innerText = `${emoji} ${have}`;
+                        els.corePill.title = `목표 던전: ${plan.zone.emoji} ${plan.zone.name}\n핵심 재료: ${nm}`;
+                        els.corePill.style.display = 'inline-flex';
+                    } else {
+                        els.corePill.style.display = 'none';
+                        els.corePillText.innerText = '';
+                        els.corePill.title = '';
+                    }
+                }
+
+                // Objective progress + checklist
+                const progEl = document.getElementById('goal-progress');
+                const checklistEl = document.getElementById('goal-checklist');
+                if (progEl) {
                 if (objective) {
                     const p = getObjectiveProgress(objective);
                     progEl.innerText = `${p.done ? '✅ ' : '🎯 '}목표: ${p.label}${p.sub ? ` · ${p.sub}` : ''}`;
@@ -6741,6 +6762,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (els.travelModal && els.travelModal.style.display === 'flex') closeTravelModal();
     if (els.debugModal && els.debugModal.style.display === 'flex') closeBalancePanel();
+    if (els.settingsModal && els.settingsModal.style.display === 'flex') closeSettings();
     if (els.mailboxModal && els.mailboxModal.style.display === 'flex') closeMailbox();
     if (els.matReqModal && els.matReqModal.style.display === 'flex') closeMaterialRequestModal();
     if (els.questModal && els.questModal.style.display === 'flex') closeRequestsModal();
@@ -6862,6 +6884,28 @@ window.rerunBalanceSim = rerunBalanceSim;
 if (els.debugModal) {
     els.debugModal.addEventListener('click', (e) => {
         if (e.target === els.debugModal) closeBalancePanel();
+    });
+}
+
+// ============================================================
+// Settings modal — pauses game time
+// ============================================================
+function openSettings() {
+    if (!els.settingsModal) return;
+    pauseGame('settings-modal');
+    els.settingsModal.style.display = 'flex';
+}
+window.openSettings = openSettings;
+
+function closeSettings() {
+    if (els.settingsModal) els.settingsModal.style.display = 'none';
+    if (pauseReason === 'settings-modal') resumeGame();
+}
+window.closeSettings = closeSettings;
+
+if (els.settingsModal) {
+    els.settingsModal.addEventListener('click', (e) => {
+        if (e.target === els.settingsModal) closeSettings();
     });
 }
 

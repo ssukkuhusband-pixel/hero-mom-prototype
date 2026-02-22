@@ -14,23 +14,23 @@
 	                <h2>아들 상태 <span id="son-level" style="font-weight: 500; color: #64748b; font-size: 0.9rem;">(Lv. 1)</span>
 	                    <span id="son-weapon" class="weapon-badge tier-C">몽둥이 (공+1)</span>
 	                </h2>
-				                <div class="parent-resources">
-				                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
-				                    <button class="mailbox-btn" id="btn-bgm" type="button" onclick="toggleBgm()" title="배경음">
-				                        <span>🔊</span>
-				                    </button>
-				                    <button class="mailbox-btn" type="button" onclick="openMailbox()" title="우편함">
-				                        <span>📮 우편함</span>
-				                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
-				                    </button>
-				                    <button class="mailbox-btn" type="button" onclick="openBalancePanel()" title="밸런스/디버그">
-			                        <span>📊 밸런스</span>
-			                    </button>
-			                    <button class="mailbox-btn reset-btn" type="button" onclick="resetGame()" title="데이터 초기화">
-			                        <span>🧹 초기화</span>
-			                    </button>
-			                </div>
-			            </div>
+					                <div class="parent-resources">
+					                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
+					                    <div class="mailbox-btn" id="core-pill" style="cursor:default; display:none;" title="현재 목표의 핵심 재료">
+					                        <span id="core-pill-text">-</span>
+					                    </div>
+					                    <button class="mailbox-btn" id="btn-bgm" type="button" onclick="toggleBgm()" title="배경음">
+					                        <span>🔊</span>
+					                    </button>
+					                    <button class="mailbox-btn" type="button" onclick="openMailbox()" title="우편함">
+					                        <span>📮 우편함</span>
+					                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
+					                    </button>
+					                    <button class="mailbox-btn" type="button" onclick="openSettings()" title="설정">
+					                        <span>⚙️</span>
+					                    </button>
+				                </div>
+				            </div>
             
             <!-- Affinity Stats (New) -->
             <div class="affinity-stats">
@@ -712,8 +712,8 @@
 	            </div>
 	        </div>
 
-        <!-- Balance/Debug Modal -->
-        <div class="modal-overlay" id="debug-modal">
+	        <!-- Balance/Debug Modal -->
+	        <div class="modal-overlay" id="debug-modal">
             <div class="modal-content furn-modal-content">
                 <div class="furn-modal-head">
                     <div>
@@ -725,10 +725,28 @@
                 <div id="debug-content" style="margin-top:12px;"></div>
                 <button class="action-btn" style="background:#0f172a; margin-top:12px;" onclick="rerunBalanceSim()">🔁 다시 계산</button>
             </div>
-        </div>
+	        </div>
+	        
+	        <!-- Settings Modal -->
+	        <div class="modal-overlay" id="settings-modal">
+	            <div class="modal-content furn-modal-content">
+	                <div class="furn-modal-head">
+	                    <div>
+	                        <h3 style="margin-bottom:2px;">⚙️ 설정</h3>
+	                        <div style="font-size:0.8rem; color:#64748b;">디버그/초기화는 여기서만 접근합니다.</div>
+	                    </div>
+	                    <button class="wardrobe-close" type="button" onclick="closeSettings()">닫기</button>
+	                </div>
+	                <div style="margin-top:12px; display:grid; grid-template-columns:1fr; gap:8px;">
+	                    <button class="action-btn" style="background:#0f172a; margin-top:0;" onclick="closeSettings(); openBalancePanel();">📊 밸런스 패널</button>
+	                    <button class="action-btn" style="background:#ef4444; margin-top:0;" onclick="resetGame()">🧹 데이터 초기화</button>
+	                </div>
+	                <div style="margin-top:10px; font-size:0.78rem; color:#64748b; line-height:1.35;">초기화는 되돌릴 수 없습니다.</div>
+	            </div>
+	        </div>
 
-        <!-- Travel (Leave/Return) Modal -->
-        <div class="modal-overlay" id="travel-modal">
+	        <!-- Travel (Leave/Return) Modal -->
+	        <div class="modal-overlay" id="travel-modal">
             <div class="modal-content travel-modal-content">
                 <div class="furn-modal-head" style="margin-bottom:10px;">
                     <div>
