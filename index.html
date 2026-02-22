@@ -628,14 +628,21 @@
 		                            </div>
 		                        </div>
 
-		                        <div class="smith-tab" id="smith-tab-craft">
-		                            <h4 style="margin-top:10px; margin-bottom:8px; color:#475569;">🧵 장비 제작 / 승급</h4>
-		                            <p style="font-size:0.85rem; margin-bottom:10px;">모험 전리품과 재료로 다음 단계 장비를 준비하세요. 목록은 전부 공개되며, 하나하나가 목표가 됩니다.</p>
-		                            <div id="craft-list"></div>
-		                        </div>
-		                    </div>
-		                        </div>
-		                    </div>
+			                        <div class="smith-tab" id="smith-tab-craft">
+			                            <h4 style="margin-top:10px; margin-bottom:8px; color:#475569;">🧵 장비 제작 / 승급</h4>
+			                            <div class="segmented" style="margin-top:8px;">
+			                                <button class="seg-btn active" data-smith-craft-tab="helmet" onclick="setSmithyCraftTab('helmet')">🪖 투구</button>
+			                                <button class="seg-btn" data-smith-craft-tab="armor" onclick="setSmithyCraftTab('armor')">🧥 갑옷</button>
+			                                <button class="seg-btn" data-smith-craft-tab="boots" onclick="setSmithyCraftTab('boots')">👢 신발</button>
+			                                <button class="seg-btn" data-smith-craft-tab="weapon" onclick="setSmithyCraftTab('weapon')">🗡️ 무기</button>
+			                                <button class="seg-btn" data-smith-craft-tab="seal" onclick="setSmithyCraftTab('seal')">🏆 인장</button>
+			                            </div>
+			                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">모험 전리품으로 다음 단계를 준비해요. (탭으로 분류)</div>
+			                            <div id="craft-list"></div>
+			                        </div>
+			                    </div>
+			                        </div>
+			                    </div>
 	                </div>
 	            </section>
 	        </section>

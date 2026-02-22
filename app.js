@@ -540,6 +540,11 @@ function ensureSmithy() {
     if (gameState.parent.smithy.buff && typeof gameState.parent.smithy.buff !== 'object') gameState.parent.smithy.buff = null;
     if (typeof gameState.parent.smithy.isBusy !== 'boolean') gameState.parent.smithy.isBusy = false;
     if (!gameState.parent.smithy.uiTab) gameState.parent.smithy.uiTab = 'gacha';
+    if (!gameState.parent.smithy.craftTab) gameState.parent.smithy.craftTab = 'helmet';
+    const ct = gameState.parent.smithy.craftTab;
+    if (ct !== 'helmet' && ct !== 'armor' && ct !== 'boots' && ct !== 'weapon' && ct !== 'seal') {
+        gameState.parent.smithy.craftTab = 'helmet';
+    }
     gameState.parent.smithy.level = Math.max(1, Math.floor(gameState.parent.smithy.level));
     gameState.parent.smithy.xp = Math.max(0, Math.floor(gameState.parent.smithy.xp));
 }
@@ -3698,6 +3703,7 @@ function applySmithyTabUI() {
         if (!el) return;
         el.classList.toggle('active', p.key === tab);
     });
+    if (tab === 'craft') applySmithyCraftTabUI();
 }
 
 function setSmithyTab(tabKey) {
@@ -3708,6 +3714,26 @@ function setSmithyTab(tabKey) {
     updateUI();
 }
 window.setSmithyTab = setSmithyTab;
+
+function applySmithyCraftTabUI() {
+    ensureSmithy();
+    const tab = gameState.parent.smithy.craftTab || 'helmet';
+    const btns = document.querySelectorAll('#smith-tab-craft [data-smith-craft-tab]');
+    btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-smith-craft-tab') === tab));
+}
+
+function setSmithyCraftTab(tabKey) {
+    ensureSmithy();
+    const t =
+        (tabKey === 'armor' || tabKey === 'boots' || tabKey === 'weapon' || tabKey === 'seal')
+            ? tabKey
+            : 'helmet';
+    gameState.parent.smithy.craftTab = t;
+    applySmithyCraftTabUI();
+    updateCraftUI();
+    saveGame();
+}
+window.setSmithyCraftTab = setSmithyCraftTab;
 
 function applyShopTabUI() {
     ensureShopState();
@@ -4437,11 +4463,14 @@ function gearNeedText(slot, needsGear) {
 function updateCraftUI() {
     const root = document.getElementById('craft-list');
     if (!root) return;
+    ensureSmithy();
+    applySmithyCraftTabUI();
+    const tab = gameState.parent.smithy.craftTab || 'helmet';
     let html = '';
 
-    // Gear sections
-    for (const slot of craftConfig.slots) {
-        html += `<div class="craft-section"><div class="craft-title">${slotName(slot)} <span class="craft-meta">10단계</span></div>`;
+    const renderGearSlot = (slot) => {
+        let out = '';
+        out += `<div class="craft-section"><div class="craft-title">${slotName(slot)} <span class="craft-meta">10단계</span></div>`;
         for (let tier = 1; tier <= craftConfig.tierCount; tier++) {
             const r = buildGearRecipe(slot, tier);
             const inv = gameState.parent.gearInventory?.[slot] || {};
@@ -4450,7 +4479,7 @@ function updateCraftUI() {
             const owned = inv[r.id]?.count || 0;
             const actionLabel = tier === 1 ? '제작' : '승급';
             const icon = `<img src="assets/items/${r.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
-            html += `
+            out += `
               <div class="craft-item ${can ? '' : 'locked'}">
                 <div class="craft-row">
                   <div>
@@ -4466,53 +4495,69 @@ function updateCraftUI() {
               </div>
             `;
         }
-        html += `</div>`;
-    }
+        out += `</div>`;
+        return out;
+    };
 
-    // Weapon milestones
-    html += `<div class="craft-section"><div class="craft-title">🗡️ 무기(마일스톤) <span class="craft-meta">T3/T6/T10</span></div>`;
-    for (const m of craftConfig.milestoneWeapons) {
-        const w = gameState.parent.specialWeaponInventory?.[m.id];
-        const can = canCraftNeeds(m.needs);
-        const icon = `<img src="assets/items/${m.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
-        html += `
-          <div class="craft-item ${can ? '' : 'locked'}">
-            <div class="craft-row">
-              <div>
-                <div class="craft-name">${icon}T${m.tier} · ${m.name}</div>
-                <div class="craft-meta">공격 +${w?.atk ?? '?'} · 특별 무기</div>
+    const renderMilestoneWeapons = () => {
+        let out = '';
+        out += `<div class="craft-section"><div class="craft-title">🗡️ 무기(마일스톤) <span class="craft-meta">T3/T6/T10</span></div>`;
+        for (const m of craftConfig.milestoneWeapons) {
+            const w = gameState.parent.specialWeaponInventory?.[m.id];
+            const can = canCraftNeeds(m.needs);
+            const icon = `<img src="assets/items/${m.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
+            out += `
+              <div class="craft-item ${can ? '' : 'locked'}">
+                <div class="craft-row">
+                  <div>
+                    <div class="craft-name">${icon}T${m.tier} · ${m.name}</div>
+                    <div class="craft-meta">공격 +${w?.atk ?? '?'} · 특별 무기</div>
+                  </div>
+                  <button class="craft-btn" ${can ? '' : 'disabled'} onclick="craftMilestoneWeapon('${m.id}')">제작</button>
+                </div>
+                <div class="craft-needs">${needsText(m.needs)}</div>
               </div>
-              <button class="craft-btn" ${can ? '' : 'disabled'} onclick="craftMilestoneWeapon('${m.id}')">제작</button>
-            </div>
-            <div class="craft-needs">${needsText(m.needs)}</div>
-          </div>
-        `;
-    }
-    html += `</div>`;
+            `;
+        }
+        out += `</div>`;
+        return out;
+    };
 
-    // Boss seals (parent-side progression using boss trophies)
-    html += `<div class="craft-section"><div class="craft-title">🏆 보스 인장 <span class="craft-meta">영구 효과</span></div>`;
-    html += `<div style="font-size:0.78rem; color:#64748b; margin-bottom:8px;">보스 전리품으로 인장을 만들어, 이후 모험이 조금씩 좋아집니다.</div>`;
-    for (const z of zones) {
-        const def = bossSealDefs[z.id];
-        if (!def) continue;
-        const crafted = isBossSealCrafted(z.id);
-        const can = !crafted && canCraftNeeds(def.needs);
-        const effect = describeSealEffects(def.effects);
-        html += `
-          <div class="craft-item ${crafted || can ? '' : 'locked'}">
-            <div class="craft-row">
-              <div>
-                <div class="craft-name">${def.name}</div>
-                <div class="craft-meta">${z.emoji} ${z.name} · ${effect ? effect : '효과 없음'}</div>
+    const renderBossSeals = () => {
+        let out = '';
+        out += `<div class="craft-section"><div class="craft-title">🏆 보스 인장 <span class="craft-meta">영구 효과</span></div>`;
+        out += `<div style="font-size:0.78rem; color:#64748b; margin-bottom:8px;">보스 전리품으로 인장을 만들어, 이후 모험이 조금씩 좋아집니다.</div>`;
+        for (const z of zones) {
+            const def = bossSealDefs[z.id];
+            if (!def) continue;
+            const crafted = isBossSealCrafted(z.id);
+            const can = !crafted && canCraftNeeds(def.needs);
+            const effect = describeSealEffects(def.effects);
+            out += `
+              <div class="craft-item ${crafted || can ? '' : 'locked'}">
+                <div class="craft-row">
+                  <div>
+                    <div class="craft-name">${def.name}</div>
+                    <div class="craft-meta">${z.emoji} ${z.name} · ${effect ? effect : '효과 없음'}</div>
+                  </div>
+                  <button class="craft-btn" ${crafted ? 'disabled' : (can ? '' : 'disabled')} onclick="craftBossSeal('${z.id}')">${crafted ? '완료' : '제작'}</button>
+                </div>
+                <div class="craft-needs">${needsText(def.needs)}${def.desc ? `<br><span style="color:#64748b;">${def.desc}</span>` : ''}</div>
               </div>
-              <button class="craft-btn" ${crafted ? 'disabled' : (can ? '' : 'disabled')} onclick="craftBossSeal('${z.id}')">${crafted ? '완료' : '제작'}</button>
-            </div>
-            <div class="craft-needs">${needsText(def.needs)}${def.desc ? `<br><span style="color:#64748b;">${def.desc}</span>` : ''}</div>
-          </div>
-        `;
+            `;
+        }
+        out += `</div>`;
+        return out;
+    };
+
+    if (tab === 'weapon') {
+        html += renderMilestoneWeapons();
+    } else if (tab === 'seal') {
+        html += renderBossSeals();
+    } else {
+        const slot = (tab === 'armor' || tab === 'boots') ? tab : (tab === 'helmet' ? 'helmet' : 'helmet');
+        html += renderGearSlot(slot);
     }
-    html += `</div>`;
 
     root.innerHTML = html;
 }
