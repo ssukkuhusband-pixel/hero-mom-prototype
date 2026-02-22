@@ -612,7 +612,8 @@ function smithyConsumeLuckyPull() {
 function performGacha(mode = 'basic') {
     const m = mode === 'premium' ? 'premium' : 'basic';
     ensureSmithy();
-    const cost = m === 'premium' ? 2500 : 1000;
+    // Balance: weapon gacha costs reduced by half
+    const cost = m === 'premium' ? 1250 : 500;
     const xpGain = m === 'premium' ? 6 : 3;
     if (m === 'premium' && !isSmithyUnlocked('premium_gacha')) {
         showToast("🎲 고급 뽑기는 대장간 숙련도 Lv.5부터 해금됩니다.", 'warning');
