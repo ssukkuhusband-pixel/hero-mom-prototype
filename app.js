@@ -4914,6 +4914,10 @@ function updateUI() {
         // Adventure view toggle
         // 기본은 실황 비공개(걱정/반가움 강화): 집 화면 유지
         if (els.adventureView) els.adventureView.classList.remove('active');
+        // Son sprite should not appear while adventuring (prevents UI overlap, also fixes reload state)
+        if (els.sprite) {
+            els.sprite.style.display = (gameState.son.state === 'ADVENTURING') ? 'none' : 'block';
+        }
 
         // Son info: adventure status
         const advInfoEl = document.getElementById('son-adventure-info');
@@ -5143,6 +5147,33 @@ if (els.travelModal) {
 // #4 — Dynamic Adventure with Live View + Loot + Encourage
 // ============================================================
 let adventureInterval = null;
+
+function ensureAdventureInterval() {
+    if (adventureInterval) return;
+    if (gameState.son.state !== 'ADVENTURING') return;
+    if (!gameState.son.adventure) return;
+
+    // Resume ticking after reload / refresh.
+    const adv = gameState.son.adventure;
+    updateAdventureScene(adv.ticks || 0, adv.totalTicks || 60);
+    if (els.btnEncourage) els.btnEncourage.disabled = !!gameState.son.adventureEncouraged;
+
+    adventureInterval = setInterval(() => {
+        if (isGamePaused) return;
+        if (!gameState.son.adventure) return;
+        gameState.son.adventure.ticks++;
+        const ticks = gameState.son.adventure.ticks;
+        const total = gameState.son.adventure.totalTicks;
+        if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
+        updateAdventureScene(ticks, total);
+        maybeSendAdventureMail(ticks, total);
+        if (ticks >= total) {
+            clearInterval(adventureInterval);
+            adventureInterval = null;
+            completeAdventure();
+        }
+    }, 1000);
+}
 
 function pickOne(arr) {
     if (!Array.isArray(arr) || arr.length === 0) return '';
@@ -6206,12 +6237,14 @@ moveToRoom(gameState.son.currentRoom);
 updateUpgradeButtons(getActiveRoom());
 updateUI();
 initPixelAssets();
+ensureAdventureInterval();
 window.addEventListener('beforeunload', () => saveGame());
 
 // Main game loop (1 second)
 setInterval(() => {
     if (isGamePaused) return;
     gameState.worldTick = Math.max(0, Math.floor((gameState.worldTick || 0) + 1));
+    ensureAdventureInterval();
     updateBookstoreRotation();
     sonAI();
     injuryTick();
