@@ -104,18 +104,19 @@ function escapeHtml(value) {
 const SAVE_KEY = 'hero_mom_2_save_v1';
 const DEFAULT_GAME_STATE = {
     worldTick: 0,
-		    parent: {
-		        gold: 500,
-		        audio: { bgmEnabled: true, bgmVolume: 0.22 },
-		        smithy: { level: 1, xp: 0 },
-		        mailUnread: 0,
-		        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
-		        uiBadges: { world: 0, network: 0 }, // unseen updates for Son tab
-		        demo: { active: true, startedTick: 0, forcedDepart: false, craftHinted: false, introShown: false }, // 10-min demo pacing
-		        supportPin: null, // { type, ... }
-		        uiLocks: { wardrobe: false },
-	        shop: { uiTab: 'grocery' },
-	        work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
+			    parent: {
+			        gold: 500,
+			        audio: { bgmEnabled: true, bgmVolume: 0.22 },
+			        smithy: { level: 1, xp: 0 },
+			        mailUnread: 0,
+			        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
+			        uiBadges: { world: 0, network: 0 }, // unseen updates for Son tab
+			        demo: { active: true, startedTick: 0, forcedDepart: false, craftHinted: false, introShown: false }, // 10-min demo pacing
+			        chapter: { id: 'demo_ch1', step: 0, completed: false }, // demo chapter goals
+			        supportPin: null, // { type, ... }
+			        uiLocks: { wardrobe: false },
+		        shop: { uiTab: 'grocery' },
+		        work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
         worldCodex: { zones: {} },
         bossSeals: {}, // { [zoneId]: true }
         furniture: {
@@ -2814,12 +2815,12 @@ function renderSupportPinUI(plan) {
         const step = buildGearRecipe(pin.slot, Math.max(1, Math.min(10, Math.floor(pin.tier || 1))));
         title = `🧵 제작: ${step.name}`;
         let extra = '';
-        if (step.needsGear) {
-            const equippedId = gameState.son.equipment?.[pin.slot]?.id;
-            if (equippedId === step.needsGear.id) {
-                extra = `<br><span style="color:#64748b;">※ 이전 장비가 현재 착용중이에요. (옷장에서 잠깐 해제/교체하면 승급 가능)</span>`;
+            if (step.needsGear) {
+                const equippedId = gameState.son.equipment?.[pin.slot]?.id;
+                if (equippedId === step.needsGear.id) {
+                    extra = `<br><span style="color:#64748b;">※ 이전 장비가 착용중이어도, 승급 시 자동 장착으로 교체됩니다.</span>`;
+                }
             }
-        }
         sub = `${gearNeedText(pin.slot, step.needsGear)}${step.needsGear ? '<br>' : ''}${needsText(step.needs)}${extra}`;
     } else if (pin.type === 'craftMilestone') {
         const def = craftConfig.milestoneWeapons.find(m => m.id === pin.weaponId);
@@ -2930,7 +2931,7 @@ function renderSupportSuggestionsUI(plan) {
             if (step.needsGear) {
                 const equippedId = gameState.son.equipment?.[s.slot]?.id;
                 if (equippedId === step.needsGear.id) {
-                    extra = `<br><span style="color:#64748b;">※ 이전 장비가 착용중이에요.</span>`;
+                    extra = `<br><span style="color:#64748b;">※ 이전 장비가 착용중이어도 승급 가능해요.</span>`;
                 }
             }
             sub = `${needsText(step.needs)}${step.needsGear ? `<br>${gearNeedText(s.slot, step.needsGear)}` : ''}${extra}`;
@@ -2959,6 +2960,231 @@ function renderSupportSuggestionsUI(plan) {
         `;
     }).join('');
 }
+
+// ============================================================
+// Chapter system (10-min demo progression shown in goal board)
+// ============================================================
+const chapterDefs = {
+    demo_ch1: {
+        id: 'demo_ch1',
+        title: '📖 챕터 1: 햇살 초원',
+        desc: '짧은 플레이(약 10분)에서 이 게임의 루프를 보여주는 목표들이에요.',
+        steps: [
+            { id: 'craft_helmet_t1', title: '🧵 첫 제작: 투구 T1', sub: '대장간에서 방어구를 한 번 제작해요.' },
+            { id: 'intel_meadow_30', title: '🗺️ 초원 탐험도 30%', sub: '수집(🧭)로 탐험도를 빠르게 올려요.' },
+            { id: 'hunt_meadow_90', title: '⚔️ 초원 사냥 90%+', sub: '장비를 갖추고 사냥(⚔️)에서 성과를 내요.' },
+            { id: 'boss_meadow_60', title: '👑 초원 보스 60%+', sub: '부분 성공이어도 전리품은 가져와요.' }
+        ]
+    }
+};
+
+function ensureChapterState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!gameState.parent.chapter || typeof gameState.parent.chapter !== 'object') {
+        gameState.parent.chapter = { id: 'demo_ch1', step: 0, completed: false, lastAdvanceAt: 0 };
+    }
+    const ch = gameState.parent.chapter;
+    if (!chapterDefs[ch.id]) ch.id = 'demo_ch1';
+    if (!Number.isFinite(ch.step)) ch.step = 0;
+    ch.step = Math.max(0, Math.min(chapterDefs[ch.id].steps.length, Math.floor(ch.step)));
+    ch.completed = !!ch.completed;
+    if (!Number.isFinite(ch.lastAdvanceAt)) ch.lastAdvanceAt = 0;
+}
+
+function getChapterDef() {
+    ensureChapterState();
+    return chapterDefs[gameState.parent.chapter.id] || chapterDefs.demo_ch1;
+}
+
+function getCurrentChapterStepId() {
+    const def = getChapterDef();
+    const idx = gameState.parent.chapter.step || 0;
+    return def.steps[idx]?.id || null;
+}
+
+function getWorldEntry(zoneId) {
+    ensureWorldCodexState();
+    return gameState.parent.worldCodex?.zones?.[zoneId] || null;
+}
+
+function getChapterStepStatus(stepId) {
+    const id = String(stepId || '');
+    if (!id) return { done: false, pill: '', detail: '' };
+    if (id === 'craft_helmet_t1') {
+        const done = isSupportPinDone({ type: 'craftGear', slot: 'helmet', tier: 1 });
+        return { done, pill: done ? '완료' : '진행', detail: done ? '투구 T1 제작 완료' : '대장간에서 투구 T1 제작' };
+    }
+    if (id === 'intel_meadow_30') {
+        const entry = getWorldEntry('meadow');
+        const cur = entry?.intel || 0;
+        const target = 30;
+        const done = cur >= target;
+        return { done, pill: `${cur}/${target}%`, detail: '초원(🌼) 수집으로 탐험도 상승' };
+    }
+    if (id === 'hunt_meadow_90') {
+        const entry = getWorldEntry('meadow');
+        const last = entry?.last || null;
+        const cur = (last && last.missionId === 'hunt') ? (last.pct || 0) : 0;
+        const target = 90;
+        const done = cur >= target;
+        return { done, pill: `${cur}/${target}%`, detail: '초원(🌼) 사냥(⚔️) 성과' };
+    }
+    if (id === 'boss_meadow_60') {
+        const entry = getWorldEntry('meadow');
+        const last = entry?.last || null;
+        const bossDefeated = !!entry?.bossDefeated;
+        const cur = (last && last.missionId === 'boss') ? (last.pct || 0) : 0;
+        const target = 60;
+        const done = bossDefeated || cur >= target;
+        return { done, pill: bossDefeated ? '격파' : `${cur}/${target}%`, detail: '초원(🌼) 보스(👑) 도전' };
+    }
+    return { done: false, pill: '', detail: '' };
+}
+
+function ensureChapterObjective() {
+    ensureChapterState();
+    const def = getChapterDef();
+    const ch = gameState.parent.chapter;
+    if (ch.completed) return;
+    const step = def.steps[ch.step];
+    if (!step) return;
+    const s = getChapterStepStatus(step.id);
+    if (s.done) return;
+
+    // Keep son objective aligned to the current chapter step (no player-setting).
+    let nextObjective = null;
+    if (step.id === 'intel_meadow_30') {
+        nextObjective = {
+            id: newObjectiveId(),
+            type: 'intel',
+            zoneId: 'meadow',
+            missionId: 'gather',
+            targetIntel: 30,
+            targetPct: 100,
+            createdTick: Math.floor(gameState.worldTick || 0),
+            tries: 0
+        };
+    } else if (step.id === 'hunt_meadow_90') {
+        nextObjective = {
+            id: newObjectiveId(),
+            type: 'hunt',
+            zoneId: 'meadow',
+            missionId: 'hunt',
+            targetIntel: null,
+            targetPct: 90,
+            createdTick: Math.floor(gameState.worldTick || 0),
+            tries: 0
+        };
+    } else if (step.id === 'boss_meadow_60') {
+        nextObjective = {
+            id: newObjectiveId(),
+            type: 'hunt',
+            zoneId: 'meadow',
+            missionId: 'boss',
+            targetIntel: null,
+            targetPct: 60,
+            createdTick: Math.floor(gameState.worldTick || 0),
+            tries: 0
+        };
+    }
+    if (!nextObjective) return;
+
+    ensureObjectiveState();
+    const cur = gameState.son.objective;
+    const same =
+        cur &&
+        cur.zoneId === nextObjective.zoneId &&
+        cur.missionId === nextObjective.missionId &&
+        cur.type === nextObjective.type &&
+        (cur.type !== 'intel' || (cur.targetIntel || 0) === (nextObjective.targetIntel || 0)) &&
+        (cur.type === 'intel' || (cur.targetPct || 0) === (nextObjective.targetPct || 0));
+    if (!same) gameState.son.objective = nextObjective;
+}
+
+function chapterTick() {
+    ensureChapterState();
+    const def = getChapterDef();
+    const ch = gameState.parent.chapter;
+    if (ch.completed) return;
+    const now = Date.now();
+    const curStep = def.steps[ch.step] || null;
+    if (!curStep) {
+        ch.completed = true;
+        return;
+    }
+    const st = getChapterStepStatus(curStep.id);
+    if (st.done) {
+        ch.step += 1;
+        ch.lastAdvanceAt = now;
+        if (ch.step >= def.steps.length) {
+            ch.completed = true;
+            showToast(`📖 ${def.title} 완료!`, 'success');
+        } else {
+            const next = def.steps[ch.step];
+            showToast(`📖 챕터 진행: ${next.title}`, 'info');
+            sonSpeech("엄마… 다음 목표도 해볼래요.");
+        }
+    }
+    ensureChapterObjective();
+}
+
+function renderChapterHtml() {
+    ensureChapterState();
+    const def = getChapterDef();
+    const ch = gameState.parent.chapter;
+    const total = def.steps.length;
+    const idx = Math.max(0, Math.min(total, ch.step || 0));
+    const doneCount = Math.min(idx, total);
+    const current = def.steps[idx] || null;
+
+    const header = `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div style="min-width:0;">
+                <div style="font-weight:1000; color:#0f172a;">${def.title} <span style="font-size:0.75rem; color:#64748b;">(${doneCount}/${total})</span></div>
+                <div style="margin-top:4px; font-size:0.75rem; color:#64748b; line-height:1.35;">${def.desc}</div>
+            </div>
+            ${ch.completed ? `<span class="chapter-pill" style="background:rgba(16,185,129,0.12); color:#065f46; border-color:rgba(16,185,129,0.22);">완료</span>` : `<button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="goToChapterStep()">바로가기</button>`}
+        </div>
+    `;
+
+    const list = def.steps.map((s, i) => {
+        const st = getChapterStepStatus(s.id);
+        const active = !ch.completed && i === idx;
+        const cls = `chapter-step ${st.done ? 'done' : ''} ${active ? 'active' : ''}`.trim();
+        const mark = st.done ? '✅' : (active ? '👉' : '☐');
+        return `
+            <div class="${cls}">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:1000;">${mark} ${s.title}</div>
+                    <div class="sub">${s.sub} · <span style="color:#334155; font-weight:900;">${st.pill || ''}</span></div>
+                </div>
+                <div class="chapter-pill">${st.pill || (st.done ? '완료' : '진행')}</div>
+            </div>
+        `;
+    }).join('');
+
+    const footer = ch.completed
+        ? `<div style="margin-top:10px; font-size:0.78rem; color:#64748b;">이제부터는 아들이 성향대로 목표를 더 자유롭게 정해요.</div>`
+        : (current ? `<div style="margin-top:10px; font-size:0.78rem; color:#64748b;">현재: <b style="color:#0f172a;">${current.title}</b></div>` : '');
+
+    return `<div class="chapter-card">${header}<div style="margin-top:10px; display:grid; gap:6px;">${list}</div>${footer}</div>`;
+}
+
+function goToChapterStep() {
+    const stepId = getCurrentChapterStepId();
+    if (!stepId) return;
+    if (stepId === 'craft_helmet_t1') {
+        setMainView('town');
+        openTownSection('smith');
+        setSmithyTab('craft');
+        setSmithyCraftTab('helmet');
+        return;
+    }
+    // For adventure goals, the best help is to open the world codex + goal board.
+    setMainView('son');
+    setSonTab('world');
+}
+window.goToChapterStep = goToChapterStep;
 
 // ============================================================
 // Objective system (son's current goal that persists)
@@ -5983,6 +6209,8 @@ function updateUI() {
         ensureBossSealState();
         ensureSupportPinState();
         ensureRequestState();
+        ensureChapterState();
+        chapterTick();
         ensureMailPhotoHistory();
         applySmithyTabUI();
         applyShopTabUI();
@@ -6155,6 +6383,9 @@ function updateUI() {
                 if (nextGoalEl) nextGoalEl.innerText = label;
                 const sub = `${diffLabel} · 권장CP ${plan.zone.recCP} · 내 CP ${plan.cp} · ${riskHint}`;
                 if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
+
+                const chapterBoxEl = document.getElementById('chapter-box');
+                if (chapterBoxEl) chapterBoxEl.innerHTML = renderChapterHtml();
 
                 // Top bar: core material preview for current goal
                 if (els.corePill && els.corePillText) {
