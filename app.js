@@ -259,6 +259,7 @@ function loadGame() {
         ensureRequestState();
         ensureObjectiveState();
         sanitizeMailboxLog();
+        ensureMailPhotoHistory();
         return true;
     } catch (e) {
         console.warn('loadGame failed', e);
@@ -554,6 +555,14 @@ function ensureBossSealState() {
     for (const [k, v] of Object.entries(gameState.parent.bossSeals)) {
         gameState.parent.bossSeals[k] = !!v;
     }
+}
+
+function ensureMailPhotoHistory() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!Array.isArray(gameState.parent.mailPhotoHistory)) gameState.parent.mailPhotoHistory = [];
+    gameState.parent.mailPhotoHistory = gameState.parent.mailPhotoHistory
+        .filter(x => typeof x === 'string' && x.trim())
+        .slice(0, 12);
 }
 
 function ensureRequestState() {
@@ -5278,6 +5287,7 @@ function updateUI() {
         ensureBossSealState();
         ensureSupportPinState();
         ensureRequestState();
+        ensureMailPhotoHistory();
         applySmithyTabUI();
         applyShopTabUI();
         applySonTabUI();
@@ -5811,9 +5821,10 @@ function renderMailbox() {
     }
     els.mailList.innerHTML = log.map(m => {
         const color = m.isGold ? '#eab308' : '#334155';
+        const title = m.img ? `${m.title} 🖼️` : m.title;
         const imgHtml = m.img ? `<div style="margin-top:8px;"><img class="mail-img" src="${m.img}" alt="첨부 이미지"></div>` : '';
         return `<li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:6px;">
-            <strong style="color:${color}">${m.title}</strong><br>
+            <strong style="color:${color}">${title}</strong><br>
             <span style="font-size:0.85rem">${m.text}</span>
             ${imgHtml}
         </li>`;
@@ -6712,15 +6723,24 @@ const sonPhotoMails = [
 function pickPhotoMailForAdventure(adv) {
     const zoneId = adv?.zoneId;
     const missionId = adv?.missionId;
-    const candidates = sonPhotoMails.filter(m =>
-        (!m.zoneId || m.zoneId === zoneId) &&
-        (!m.missionId || m.missionId === missionId)
-    );
-    const pool = candidates.length ? candidates : sonPhotoMails;
+    ensureMailPhotoHistory();
     const sent = adv?.photosSent || {};
-    const filtered = pool.filter(m => !sent[m.id]);
-    const pickFrom = filtered.length ? filtered : pool;
-    return pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    const recent = new Set((gameState.parent.mailPhotoHistory || []).slice(0, 5));
+
+    const weights = sonPhotoMails.map(m => {
+        let w = 1;
+        const zMatch = !!(m.zoneId && zoneId && m.zoneId === zoneId);
+        const mMatch = !!(m.missionId && missionId && m.missionId === missionId);
+        if (zMatch) w *= 3.2;
+        if (mMatch) w *= 2.0;
+        if (zMatch && mMatch) w *= 1.4;
+        if (sent[m.id]) w *= 0.01;
+        if (recent.has(m.id)) w *= 0.25;
+        return { mail: m, w };
+    }).filter(x => x.w > 0);
+
+    const picked = rollFromWeights(weights);
+    return picked?.mail || sonPhotoMails[0];
 }
 
 function maybeSendAdventureMail(ticks, totalTicks) {
@@ -6763,37 +6783,43 @@ function maybeSendAdventureMail(ticks, totalTicks) {
 
     const zone = getZoneById(adv.zoneId);
     const mission = getMissionById(adv.missionId);
-    // Sometimes attach an image for extra emotion.
+    // Attach a photo more often, and guarantee at least one photo on the first letter.
     const photoSentCount = Object.keys(adv.photosSent || {}).length;
-    let photoChance = 0.38;
-    if (adv.mailCount === 0 && photoSentCount === 0) photoChance = 0.68; // first message: more likely to include a photo
-    if (mark.key === 'c' && photoSentCount === 0) photoChance = Math.max(photoChance, 0.55);
-    if (Math.random() < photoChance) {
+    const forcePhoto = (adv.mailCount === 0 && photoSentCount === 0) || (mark.key === 'c' && photoSentCount === 0);
+    const attachPhoto = forcePhoto || (Math.random() < 0.45);
+
+    const titles = [
+        `📮 안부: ${zone.emoji} ${zone.name}`,
+        `📮 소식: ${mission.emoji} ${mission.name}`,
+        `📮 짧은 편지`,
+        `📮 안부 편지`
+    ];
+    const title = titles[Math.floor(Math.random() * titles.length)];
+    const templates = [
+        `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
+        `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
+        `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
+        `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
+        `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`,
+        `엄마, 오늘은 하늘이 예뻐요. ${zone.name}에서 잠깐 멈췄어요.`,
+        `엄마! 나 진짜 조금씩 강해지는 것 같아요. 돌아가면 보여줄게요!`
+    ];
+
+    if (attachPhoto) {
         const p = pickPhotoMailForAdventure(adv);
-        if (p) {
+        if (p && p.img) {
             adv.photosSent[p.id] = true;
+            ensureMailPhotoHistory();
+            gameState.parent.mailPhotoHistory.unshift(p.id);
+            gameState.parent.mailPhotoHistory = gameState.parent.mailPhotoHistory.slice(0, 12);
             addMail(p.title, String(p.text || '').replace(/\n/g, '<br>'), { img: p.img });
         } else {
-            const templates = [
-                `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
-                `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
-                `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
-                `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
-                `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
-            ];
             const msg = templates[Math.floor(Math.random() * templates.length)];
-            addMail("📮 안부 편지", msg);
+            addMail(title, msg);
         }
     } else {
-        const templates = [
-            `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
-            `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
-            `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
-            `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
-            `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
-        ];
         const msg = templates[Math.floor(Math.random() * templates.length)];
-        addMail("📮 안부 편지", msg);
+        addMail(title, msg);
     }
     adv.lastContactTick = ticks;
     adv.mailCount++;
