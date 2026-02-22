@@ -540,6 +540,16 @@ function ensureRequestState() {
     gameState.son.requests = gameState.son.requests
         .filter(r => r && typeof r === 'object' && r.id && r.kind && r.dueAt)
         .slice(0, 10);
+
+    // Migrate old “need_book” requests: count-based completion was too strict for swaps.
+    ensureLibraryState();
+    const rev = gameState.parent.library?.shelfPlaceRevision || 0;
+    for (const r of gameState.son.requests) {
+        if (!r || r.status !== 'open') continue;
+        if (r.kind !== 'need_book') continue;
+        if (!r.data || typeof r.data !== 'object') r.data = {};
+        if (!Number.isFinite(r.data.baselineShelfPlaceRevision)) r.data.baselineShelfPlaceRevision = rev;
+    }
 }
 
 function cleanupLegacyParentSettings() {
@@ -743,6 +753,15 @@ const ingredientNames = {
     herb: '🌿 약초'
 };
 
+// Grocery prices (should match shop buttons in index.html)
+const ingredientPrices = {
+    meat: 60,
+    salt: 15,
+    carrot: 20,
+    tomato: 25,
+    herb: 35
+};
+
 // --- Bookstore & Bookshelf ---
 const bookGradeInfo = {
     C: { label: 'C', color: '#64748b' },
@@ -789,7 +808,7 @@ function isBookUnlocked(book) {
 
 function ensureLibraryState() {
     if (!gameState.parent.library || typeof gameState.parent.library !== 'object') {
-        gameState.parent.library = { shelfLevel: 1, owned: {}, read: {}, shelf: [], shelfBias: [] };
+        gameState.parent.library = { shelfLevel: 1, owned: {}, read: {}, shelf: [], shelfBias: [], shelfPlaceRevision: 0 };
     }
     const lib = gameState.parent.library;
     if (!Number.isFinite(lib.shelfLevel)) lib.shelfLevel = 1;
@@ -798,6 +817,8 @@ function ensureLibraryState() {
     if (!lib.read || typeof lib.read !== 'object') lib.read = {};
     if (!Array.isArray(lib.shelf)) lib.shelf = [];
     if (!Array.isArray(lib.shelfBias)) lib.shelfBias = [];
+    if (!Number.isFinite(lib.shelfPlaceRevision)) lib.shelfPlaceRevision = 0;
+    lib.shelfPlaceRevision = Math.max(0, Math.floor(lib.shelfPlaceRevision));
 
     const slots = getBookshelfSlots(lib.shelfLevel);
     while (lib.shelf.length < slots) lib.shelf.push(null);
@@ -1138,6 +1159,7 @@ function placeBookToShelf(bookId) {
     }
     lib.shelf[idx] = bookId;
     lib.shelfBias[idx] = Math.random();
+    lib.shelfPlaceRevision = Math.max(0, Math.floor(lib.shelfPlaceRevision || 0) + 1);
     showToast("📚 책장에 배치했습니다.", 'success');
     openBookshelfManager();
     updateDeskSlotUI();
@@ -4849,6 +4871,53 @@ function countShelfBooks() {
     return (gameState.parent.library?.shelf || []).filter(Boolean).length;
 }
 
+function getBestOwnedWeaponAtk() {
+    const curAtk = gameState.son.equipment?.weapon?.atk || 0;
+    let bestAtk = curAtk;
+    const tiers = ['C', 'B', 'A', 'S'];
+    for (const t of tiers) {
+        const item = gameState.parent.weaponInventory?.[t];
+        if (!item || (item.count || 0) <= 0) continue;
+        bestAtk = Math.max(bestAtk, item.atk || 0);
+    }
+    for (const w of Object.values(gameState.parent.specialWeaponInventory || {})) {
+        if (!w || (w.count || 0) <= 0) continue;
+        bestAtk = Math.max(bestAtk, w.atk || 0);
+    }
+    return bestAtk;
+}
+
+function hasBetterWeaponToEquip(baselineAtk) {
+    const base = Math.max(0, Math.floor(baselineAtk || 0));
+    return getBestOwnedWeaponAtk() > base;
+}
+
+function getIngredientCostToCookRecipe(recipeId) {
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) return Infinity;
+    ensurePantry();
+    let total = 0;
+    for (const [k, v] of Object.entries(recipe.needs || {})) {
+        const need = Math.max(0, Math.floor(v || 0));
+        const have = getPantryCount(k);
+        const missing = Math.max(0, need - have);
+        const price = ingredientPrices[k];
+        if (!Number.isFinite(price)) return Infinity;
+        total += missing * price;
+    }
+    return total;
+}
+
+function canAcquireAnyNewBook() {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    // placeable now (owned + unread + not on shelf)
+    const canPlaceNow = bookCatalog.some(b => lib.owned?.[b.id] && !lib.read?.[b.id] && !(lib.shelf || []).includes(b.id));
+    if (canPlaceNow) return true;
+    // purchasable in the future (not owned + unlocked)
+    return bookCatalog.some(b => !lib.owned?.[b.id] && isBookUnlocked(b));
+}
+
 function addRequestFromTemplate(kind) {
     ensureRequestState();
     ensureSonGrowthState();
@@ -4880,13 +4949,14 @@ function addRequestFromTemplate(kind) {
     if (kind === 'need_better_weapon') {
         req.data.baselineAtk = gameState.son.equipment?.weapon?.atk || 0;
         req.data.baselineName = gameState.son.equipment?.weapon?.name || '';
-        req.help = `해결: 현재(${req.data.baselineName} 공+${req.data.baselineAtk})보다 좋은 무기를 장착해두기`;
+        if (!hasBetterWeaponToEquip(req.data.baselineAtk)) return null;
+        req.help = `해결: 요청 목록에서 “자동 장착”을 누르거나, 옷장에서 현재(${req.data.baselineName} 공+${req.data.baselineAtk})보다 좋은 무기를 장착해두기`;
     }
     if (kind === 'need_book') {
-        req.data.baselineShelfCount = countShelfBooks();
-        req.help = req.data.baselineShelfCount > 0
-            ? '해결: 책장에 “새 책”을 한 권 더 배치해두기'
-            : '해결: 집(서재)에서 책장에 책을 1권 이상 배치해두기';
+        ensureLibraryState();
+        if (!canAcquireAnyNewBook()) return null;
+        req.data.baselineShelfPlaceRevision = gameState.parent.library?.shelfPlaceRevision || 0;
+        req.help = '해결: 집(서재)에서 책장에 책을 “추가 배치”하거나, 기존 책을 빼고 다른 책으로 “교체”해두기';
     }
 
     gameState.son.requests.unshift(req);
@@ -4905,8 +4975,10 @@ function isRequestConditionMet(req) {
         return gameState.rooms?.['room-table']?.placedItem === 'steak';
     }
     if (req.kind === 'need_book') {
-        const base = Math.max(0, Math.floor(req.data?.baselineShelfCount || 0));
-        return countShelfBooks() > base;
+        ensureLibraryState();
+        const baseRev = Math.max(0, Math.floor(req.data?.baselineShelfPlaceRevision || 0));
+        const curRev = gameState.parent.library?.shelfPlaceRevision || 0;
+        return (curRev > baseRev) && (countShelfBooks() > 0);
     }
     if (req.kind === 'need_better_weapon') {
         const baseAtk = Math.max(0, Math.floor(req.data?.baselineAtk || 0));
@@ -5097,7 +5169,32 @@ function triggerRandomRequest() {
     if (now - lastRequestRollAt < 18 * 1000) return;
     lastRequestRollAt = now;
 
-    if (Math.random() > 0.55) return;
+    // Reduce home request frequency (~50%).
+    if (Math.random() > 0.275) return;
+
+    const feasible = (kind) => {
+        if (kind === 'need_better_weapon') {
+            const curAtk = gameState.son.equipment?.weapon?.atk || 0;
+            return hasBetterWeaponToEquip(curAtk);
+        }
+        if (kind === 'need_steak') {
+            const r = recipes.find(x => x.id === 'steak');
+            if (r && canCookRecipe(r)) return true;
+            const cost = getIngredientCostToCookRecipe('steak');
+            if (!(Number.isFinite(cost) && cost !== Infinity)) return false;
+            if (gameState.parent.gold >= cost) return true;
+            // Sometimes doable via quick side jobs (energy-based).
+            ensureWorkState();
+            const w = gameState.parent.work;
+            const reward = getWorkGoldReward(w.level);
+            const bestGold = gameState.parent.gold + reward * Math.max(0, Math.floor(w.energy || 0));
+            return bestGold >= cost;
+        }
+        if (kind === 'need_book') {
+            return canAcquireAnyNewBook();
+        }
+        return true;
+    };
 
     const weights = [
         { kind: 'need_steak', w: 22 },
@@ -5105,7 +5202,8 @@ function triggerRandomRequest() {
         { kind: 'need_better_weapon', w: 14 },
         { kind: 'need_money', w: 12 },
         { kind: 'need_hug', w: 10 }
-    ].filter(x => !open.some(r => r.kind === x.kind));
+    ].filter(x => !open.some(r => r.kind === x.kind))
+        .filter(x => feasible(x.kind));
     if (!weights.length) return;
     const picked = rollFromWeights(weights);
     addRequestFromTemplate(picked.kind);
