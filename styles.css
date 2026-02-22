@@ -435,10 +435,23 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     font-weight: 900;
 }
 .gear-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-weight: 900;
     color: #0f172a;
     font-size: 0.9rem;
     min-height: 1.1rem;
+}
+.eq-item-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    object-fit: contain;
+    image-rendering: pixelated;
+    flex: 0 0 auto;
 }
 .gear-btn {
     border: none;
@@ -528,14 +541,59 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     cursor: not-allowed;
 }
 
-.weapon-badge { font-size: 0.7rem; background: #334155; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 5px; }
+.weapon-badge {
+    font-size: 0.7rem;
+    background: #334155;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.weapon-badge img {
+    width: 16px;
+    height: 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(226,232,240,0.28);
+    background: rgba(255,255,255,0.12);
+    image-rendering: pixelated;
+    object-fit: contain;
+}
 .tier-C { color: #94a3b8; } .tier-B { color: #3b82f6; } .tier-A { color: #a855f7; } .tier-S { color: #f59e0b; font-weight: bold; text-shadow: 0 0 5px #fcd34d;}
 
 /* Item Modal */
 .modal-overlay { display: none; position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; overflow: auto; }
 .modal-content { background: white; padding: 20px; border-radius: 16px; width: 80%; max-width: 300px; text-align: center; }
-.item-btn { width: 100%; padding: 10px; margin: 5px 0; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-weight: bold; }
+.item-btn {
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 900;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+}
 .item-btn:hover { background: #e2e8f0; }
+.item-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    object-fit: contain;
+    image-rendering: pixelated;
+    flex: 0 0 auto;
+}
+.item-lines { min-width: 0; }
+.item-title { font-size: 0.85rem; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-sub { font-size: 0.75rem; color: #64748b; font-weight: 900; margin-top: 2px; }
 
 /* Modal stacking */
 #inv-modal { z-index: 120; }
@@ -816,6 +874,11 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     align-items: center;
     justify-content: center;
     overflow: hidden;
+}
+.wg-sil {
+    width: 22px;
+    height: 22px;
+    color: #94a3b8;
 }
 .wg-img {
     width: 46px;

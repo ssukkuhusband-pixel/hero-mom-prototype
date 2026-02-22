@@ -944,7 +944,9 @@ function performGacha(mode = 'basic') {
     setSmithyBusy(true);
     setTimeout(() => {
         if (els.gachaResult) {
-            els.gachaResult.innerHTML = `[${picked.tier}급] ${picked.name} 획득! → 옷장에 보관됨`;
+            const iconId = `weapon_${picked.tier}`;
+            const icon = `<img src="assets/items/${iconId}.png" alt="" style="width:28px; height:28px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:8px; border:1px solid rgba(226,232,240,0.9); background:#fff;" onerror="this.style.display='none'">`;
+            els.gachaResult.innerHTML = `${icon}[${picked.tier}급] ${picked.name} 획득! → 옷장에 보관됨`;
             els.gachaResult.className = `gacha-result tier-${picked.tier}`;
         }
         setSmithyBusy(false);
@@ -4447,11 +4449,12 @@ function updateCraftUI() {
             const can = canCraftNeeds(r.needs) && hasPrev;
             const owned = inv[r.id]?.count || 0;
             const actionLabel = tier === 1 ? '제작' : '승급';
+            const icon = `<img src="assets/items/${r.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
             html += `
               <div class="craft-item ${can ? '' : 'locked'}">
                 <div class="craft-row">
                   <div>
-                    <div class="craft-name">T${tier} · ${r.name}</div>
+                    <div class="craft-name">${icon}T${tier} · ${r.name}</div>
                     <div class="craft-meta">방어 +${r.def} · 보유 ${owned}개 · 핵심: ${gameState.parent.loot[r.themeCore]?.name || r.themeCore}</div>
                   </div>
                   <div style="display:flex; gap:6px;">
@@ -4471,11 +4474,12 @@ function updateCraftUI() {
     for (const m of craftConfig.milestoneWeapons) {
         const w = gameState.parent.specialWeaponInventory?.[m.id];
         const can = canCraftNeeds(m.needs);
+        const icon = `<img src="assets/items/${m.id}.png" alt="" style="width:20px; height:20px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
         html += `
           <div class="craft-item ${can ? '' : 'locked'}">
             <div class="craft-row">
               <div>
-                <div class="craft-name">T${m.tier} · ${m.name}</div>
+                <div class="craft-name">${icon}T${m.tier} · ${m.name}</div>
                 <div class="craft-meta">공격 +${w?.atk ?? '?'} · 특별 무기</div>
               </div>
               <button class="craft-btn" ${can ? '' : 'disabled'} onclick="craftMilestoneWeapon('${m.id}')">제작</button>
@@ -4538,6 +4542,15 @@ function openInventory(roomType) {
     els.invList.innerHTML = '';
     let hasItems = false;
 
+    const setItemButtonHtml = (btn, { iconId = null, title = '', sub = '' } = {}) => {
+        const safeTitle = String(title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeSub = String(sub || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const iconHtml = iconId
+            ? `<img class="item-icon" src="assets/items/${String(iconId)}.png" alt="" onerror="this.style.display='none'">`
+            : '';
+        btn.innerHTML = `${iconHtml}<div class="item-lines"><div class="item-title">${safeTitle}</div>${safeSub ? `<div class="item-sub">${safeSub}</div>` : ''}</div>`;
+    };
+
     if (roomType === 'weapon') {
         // Tier weapons (gacha)
         Object.keys(gameState.parent.weaponInventory).forEach(tier => {
@@ -4546,7 +4559,11 @@ function openInventory(roomType) {
                 hasItems = true;
                 const btn = document.createElement('button');
                 btn.className = 'item-btn';
-                btn.innerText = `[${tier}급] ${item.name} (보유: ${item.count})`;
+                setItemButtonHtml(btn, {
+                    iconId: `weapon_${tier}`,
+                    title: `[${tier}급] ${item.name}`,
+                    sub: `보유 ${item.count} · 공+${item.atk}`
+                });
                 btn.onclick = () => equipWeaponTier(tier);
                 els.invList.appendChild(btn);
             }
@@ -4558,7 +4575,11 @@ function openInventory(roomType) {
                 hasItems = true;
                 const btn = document.createElement('button');
                 btn.className = 'item-btn';
-                btn.innerText = `[특별] ${w.name} (공+${w.atk}) (보유: ${w.count})`;
+                setItemButtonHtml(btn, {
+                    iconId: w.id,
+                    title: `[특별] ${w.name}`,
+                    sub: `보유 ${w.count} · 공+${w.atk}`
+                });
                 btn.onclick = () => equipSpecialWeapon(w.id);
                 els.invList.appendChild(btn);
             }
@@ -4571,7 +4592,11 @@ function openInventory(roomType) {
                 hasItems = true;
                 const btn = document.createElement('button');
                 btn.className = 'item-btn';
-                btn.innerText = `${item.name} (방어 +${item.def}) (보유: ${item.count})`;
+                setItemButtonHtml(btn, {
+                    iconId: item.id,
+                    title: item.name,
+                    sub: `보유 ${item.count} · 방+${item.def}`
+                });
                 btn.onclick = () => equipGear(roomType, item.id);
                 els.invList.appendChild(btn);
             }
@@ -4728,16 +4753,47 @@ function updateWardrobeUI() {
     weaponStat.innerText = w ? `공+${w.atk}` : '';
 
     const h = gameState.son.equipment.helmet;
-    helmetName.innerText = h?.name || '-';
-    helmetStat.innerText = h ? `방+${h.def}` : '';
+    const hEmpty = !h?.id || String(h.id).startsWith('none_');
+    helmetName.innerText = hEmpty ? '비어있음' : (h?.name || '-');
+    helmetStat.innerText = (!hEmpty && h) ? `방+${h.def}` : '';
 
     const a = gameState.son.equipment.armor;
-    armorName.innerText = a?.name || '-';
-    armorStat.innerText = a ? `방+${a.def}` : '';
+    const aEmpty = !a?.id || String(a.id).startsWith('none_');
+    armorName.innerText = aEmpty ? '비어있음' : (a?.name || '-');
+    armorStat.innerText = (!aEmpty && a) ? `방+${a.def}` : '';
 
     const b = gameState.son.equipment.boots;
-    bootsName.innerText = b?.name || '-';
-    bootsStat.innerText = b ? `방+${b.def}` : '';
+    const bEmpty = !b?.id || String(b.id).startsWith('none_');
+    bootsName.innerText = bEmpty ? '비어있음' : (b?.name || '-');
+    bootsStat.innerText = (!bEmpty && b) ? `방+${b.def}` : '';
+
+    const setImg = (slot, eq) => {
+        const img = document.getElementById(`wg-img-${slot}`);
+        const wrap = img ? img.closest('.wg-icon') : null;
+        const sil = wrap ? wrap.querySelector('.wg-sil') : null;
+        if (!img || !wrap) return;
+        const id = eq?.id;
+        const isEmpty = !id || String(id).startsWith('none_');
+        const iconId = (!isEmpty) ? String(id) : null;
+        if (iconId) {
+            img.src = `assets/items/${iconId}.png`;
+            img.style.display = 'block';
+            if (sil) sil.style.display = 'none';
+            img.onerror = () => {
+                img.style.display = 'none';
+                if (sil) sil.style.display = 'block';
+            };
+        } else {
+            img.src = '';
+            img.style.display = 'none';
+            if (sil) sil.style.display = 'block';
+        }
+    };
+
+    setImg('weapon', w || null);
+    setImg('helmet', h || null);
+    setImg('armor', a || null);
+    setImg('boots', b || null);
 }
 
 function selectRoomView(roomId) {
@@ -4831,7 +4887,8 @@ function updateSynthesisUI() {
         const nextTier = arr[index + 1];
         const div = document.createElement('div');
         div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:5px; background:white; border-radius:5px;';
-        let html = `<span style="font-size:0.85rem">[${tier}] ${item.name}: ${item.count}개</span>`;
+        const icon = `<img src="assets/items/weapon_${tier}.png" alt="" style="width:22px; height:22px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
+        let html = `<span style="font-size:0.85rem">${icon}[${tier}] ${item.name}: ${item.count}개</span>`;
         if (nextTier && item.count >= 3) {
             html += `<button class="action-btn" style="width:auto; padding:4px 10px; margin:0; font-size:0.75rem; background:#8b5cf6;" onclick="synthesizeWeapon('${tier}', '${nextTier}')">합성 (3개)</button>`;
         } else if (nextTier) {
@@ -4850,7 +4907,8 @@ function updateSynthesisUI() {
         Object.values(gameState.parent.specialWeaponInventory).forEach(w => {
             const div = document.createElement('div');
             div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:5px; background:white; border-radius:5px; border:1px solid #e2e8f0;';
-            div.innerHTML = `<span style="font-size:0.85rem">[★] ${w.name}: ${w.count}개</span><span style="font-size:0.7rem; color:#94a3b8">공+${w.atk}</span>`;
+            const icon = `<img src="assets/items/${w.id}.png" alt="" style="width:22px; height:22px; vertical-align:middle; margin-right:6px; image-rendering:pixelated; border-radius:7px; border:1px solid #e2e8f0; background:#fff;" onerror="this.style.display='none'">`;
+            div.innerHTML = `<span style="font-size:0.85rem">${icon}[★] ${w.name}: ${w.count}개</span><span style="font-size:0.7rem; color:#94a3b8">공+${w.atk}</span>`;
             els.weaponInventoryList.appendChild(div);
         });
     }
@@ -5626,7 +5684,7 @@ function updateUI() {
         applySonTabUI();
         els.gold.innerText = gameState.parent.gold;
         els.sonLevel.innerText = `(Lv. ${gameState.son.level})`;
-        els.sonWeapon.innerText = `${gameState.son.equipment.weapon.name} (공+${gameState.son.equipment.weapon.atk})`;
+        els.sonWeapon.innerHTML = `<img src="assets/items/${String(gameState.son.equipment.weapon.id)}.png" alt="" onerror="this.style.display='none'">${gameState.son.equipment.weapon.name} (공+${gameState.son.equipment.weapon.atk})`;
         els.sonWeapon.className = `weapon-badge tier-${gameState.son.equipment.weapon.tier}`;
         els.barHp.style.width = `${(gameState.son.hp / gameState.son.maxHp) * 100}%`;
         els.barHunger.style.width = `${(gameState.son.hunger / gameState.son.maxHunger) * 100}%`;
@@ -5706,15 +5764,25 @@ function updateUI() {
             }
         }
 
-        const eqWeaponEl = document.getElementById('eq-weapon');
-        const eqHelmetEl = document.getElementById('eq-helmet');
-        const eqArmorEl = document.getElementById('eq-armor');
-        const eqBootsEl = document.getElementById('eq-boots');
-        if (eqWeaponEl) eqWeaponEl.innerText = `${gameState.son.equipment.weapon.name} (공+${gameState.son.equipment.weapon.atk})`;
-        if (eqHelmetEl) eqHelmetEl.innerText = `${gameState.son.equipment.helmet.name} (방+${gameState.son.equipment.helmet.def})`;
-        if (eqArmorEl) eqArmorEl.innerText = `${gameState.son.equipment.armor.name} (방+${gameState.son.equipment.armor.def})`;
-        if (eqBootsEl) eqBootsEl.innerText = `${gameState.son.equipment.boots.name} (방+${gameState.son.equipment.boots.def})`;
-        updateWardrobeUI();
+	        const eqWeaponEl = document.getElementById('eq-weapon');
+	        const eqHelmetEl = document.getElementById('eq-helmet');
+	        const eqArmorEl = document.getElementById('eq-armor');
+	        const eqBootsEl = document.getElementById('eq-boots');
+	        const iconHtml = (id) => `<img class="eq-item-icon" src="assets/items/${String(id)}.png" alt="" onerror="this.style.display='none'">`;
+	        const setEq = (el, eq, label) => {
+	            if (!el || !eq) return;
+	            const id = String(eq.id || '');
+	            const empty = !id || id.startsWith('none_');
+	            const icon = empty ? '' : iconHtml(id);
+	            const name = empty ? '비어있음' : eq.name;
+	            const stat = empty ? '' : ` (${label}+${label === '공' ? (eq.atk || 0) : (eq.def || 0)})`;
+	            el.innerHTML = `${icon}<span>${name}${stat}</span>`;
+	        };
+	        setEq(eqWeaponEl, gameState.son.equipment.weapon, '공');
+	        setEq(eqHelmetEl, gameState.son.equipment.helmet, '방');
+	        setEq(eqArmorEl, gameState.son.equipment.armor, '방');
+	        setEq(eqBootsEl, gameState.son.equipment.boots, '방');
+	        updateWardrobeUI();
 
         const braveryFill = document.getElementById('trait-bravery');
         const diligenceFill = document.getElementById('trait-diligence');
