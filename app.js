@@ -315,7 +315,7 @@ function getWorkXpToNext(level) {
 
 function getWorkGoldReward(level) {
     const lv = Math.max(1, Math.floor(level || 1));
-    return 20 + (lv - 1) * 2;
+    return 50 + (lv - 1) * 2;
 }
 
 function ensureWorkState() {
