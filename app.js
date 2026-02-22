@@ -172,6 +172,11 @@ const DEFAULT_GAME_STATE = {
         hunger: 50, maxHunger: 100,
         state: 'IDLE', currentRoom: 'room-desk',
         homeActionCount: 0, // counts completed home actions; used to force adventures after enough routines
+        network: {
+            contacts: [], // [{ id, kind, name, desc, metTick, tags: [] }]
+            buddy: null,  // { id, name, desc, cpBonus, adventuresLeft }
+            aspiration: null // 'strength' | 'magic' | 'archery' | null
+        },
         stats: {
             physAtk: 0,
             magicAtk: 0,
@@ -255,6 +260,7 @@ function loadGame() {
         ensureSupportPinState();
         ensureMaterialRequestState();
         ensureSonBehaviorState();
+        ensureNetworkState();
         cleanupLegacyParentSettings();
         ensureRequestState();
         ensureObjectiveState();
@@ -527,6 +533,124 @@ function ensureSonBehaviorState() {
     if (!gameState.son || typeof gameState.son !== 'object') gameState.son = {};
     if (!Number.isFinite(gameState.son.homeActionCount)) gameState.son.homeActionCount = 0;
     gameState.son.homeActionCount = Math.max(0, Math.floor(gameState.son.homeActionCount));
+}
+
+function ensureNetworkState() {
+    if (!gameState.son || typeof gameState.son !== 'object') gameState.son = {};
+    if (!gameState.son.network || typeof gameState.son.network !== 'object') {
+        gameState.son.network = { contacts: [], buddy: null, aspiration: null };
+    }
+    const n = gameState.son.network;
+    if (!Array.isArray(n.contacts)) n.contacts = [];
+    n.contacts = n.contacts
+        .filter(c => c && typeof c === 'object' && c.id && c.name)
+        .slice(0, 20)
+        .map(c => ({
+            id: String(c.id),
+            kind: String(c.kind || 'unknown'),
+            name: String(c.name || ''),
+            desc: String(c.desc || ''),
+            metTick: Math.max(0, Math.floor(c.metTick || 0)),
+            tags: Array.isArray(c.tags) ? c.tags.slice(0, 6).map(x => String(x)) : []
+        }));
+
+    if (n.buddy && typeof n.buddy === 'object') {
+        n.buddy = {
+            id: String(n.buddy.id || 'buddy'),
+            name: String(n.buddy.name || '동료'),
+            desc: String(n.buddy.desc || ''),
+            cpBonus: Math.max(0, Math.floor(n.buddy.cpBonus || 0)),
+            adventuresLeft: Math.max(0, Math.floor(n.buddy.adventuresLeft || 0))
+        };
+        if (n.buddy.adventuresLeft <= 0) n.buddy = null;
+    } else {
+        n.buddy = null;
+    }
+
+    const a = n.aspiration;
+    n.aspiration = (a === 'strength' || a === 'magic' || a === 'archery') ? a : null;
+}
+
+function upsertNetworkContact(contact) {
+    ensureNetworkState();
+    const c = contact && typeof contact === 'object' ? contact : null;
+    if (!c || !c.id || !c.name) return false;
+    const n = gameState.son.network;
+    const id = String(c.id);
+    const idx = (n.contacts || []).findIndex(x => x && x.id === id);
+    const next = {
+        id,
+        kind: String(c.kind || 'unknown'),
+        name: String(c.name || ''),
+        desc: String(c.desc || ''),
+        metTick: Math.max(0, Math.floor(c.metTick || Math.floor(gameState.worldTick || 0))),
+        tags: Array.isArray(c.tags) ? c.tags.slice(0, 6).map(x => String(x)) : []
+    };
+    if (idx >= 0) {
+        const prev = n.contacts[idx];
+        // Keep earliest met tick, but allow desc to update.
+        next.metTick = Math.min(next.metTick, Math.max(0, Math.floor(prev?.metTick || next.metTick)));
+        n.contacts[idx] = next;
+    } else {
+        n.contacts.unshift(next);
+        if (n.contacts.length > 20) n.contacts = n.contacts.slice(0, 20);
+    }
+    return true;
+}
+
+function renderSonNetworkUI() {
+    const root = document.getElementById('son-network');
+    if (!root) return;
+    ensureNetworkState();
+    const n = gameState.son.network;
+    const buddy = n.buddy;
+    const contacts = (n.contacts || []).slice(0, 6);
+
+    const aspirationLabel =
+        n.aspiration === 'strength' ? '⚔️ 기사/수호자' :
+            n.aspiration === 'magic' ? '🧙‍♂️ 마법/사제' :
+                n.aspiration === 'archery' ? '🏹 궁수/사냥꾼' :
+                    null;
+
+    let html = '';
+    if (aspirationLabel) {
+        html += `<div style="font-size:0.8rem; color:#0f172a; font-weight:1000;">요즘 꿈: ${aspirationLabel}</div>`;
+    } else {
+        html += `<div style="font-size:0.78rem; color:#64748b;">아직은 어떤 사람이 될지 고민 중이에요.</div>`;
+    }
+
+    if (buddy) {
+        html += `
+          <div class="support-row" style="margin-top:10px;">
+            <div style="flex:1; min-width:0;">
+              <div class="support-title">🧑‍🤝‍🧑 동료: ${buddy.name}</div>
+              <div class="support-sub">${buddy.desc || '함께 모험해요.'}<br>효과: CP +${buddy.cpBonus} · 남은 동행 ${buddy.adventuresLeft}회</div>
+            </div>
+          </div>
+        `;
+    }
+
+    if (!contacts.length) {
+        html += `<div style="margin-top:10px; font-size:0.78rem; color:#64748b;">아직 특별한 인연이 없어요. 모험 중에 새로운 사람을 만날 수도 있어요.</div>`;
+        root.innerHTML = html;
+        return;
+    }
+
+    html += `<div style="margin-top:10px; font-size:0.78rem; color:#64748b; font-weight:900;">최근 만난 인연</div>`;
+    html += contacts.map(c => {
+        const icon = c.kind === 'mentor' ? '🧑‍🏫' : c.kind === 'friend' ? '🧑‍🤝‍🧑' : c.kind === 'inspiration' ? '✨' : '👤';
+        const desc = c.desc ? `<div style="margin-top:4px; font-size:0.78rem; color:#64748b; line-height:1.35;">${c.desc}</div>` : '';
+        return `
+          <div class="furn-row" style="align-items:flex-start;">
+            <div style="min-width:0;">
+              <div class="furn-row-title">${icon} ${c.name}</div>
+              ${desc}
+            </div>
+          </div>
+        `;
+    }).join('');
+
+    root.innerHTML = html;
 }
 
 function ensureMaterialRequestState() {
@@ -2191,6 +2315,7 @@ function ensureLootKey(key) {
             guardian_core: '🗿 수호자의 핵',
             griffin_feather: '🦅 그리핀 깃털',
             ancient_scale: '🐉 고룡 비늘',
+            pretty_flower: '🌸 예쁜 꽃',
             leather: '🧵 가죽',
             steel: '🪨 강철',
             iron_scrap: '🧩 철 조각',
@@ -2866,8 +2991,11 @@ function getSonCombatPower() {
     const atkTotal = atk + Math.floor(magicAtk * 0.8) + Math.floor(accuracy * 0.15);
     const defTotal = def + Math.floor(magicRes * 0.35) + Math.floor(agility * 0.2);
     const base = (atkTotal + 1) * (1 + defTotal * 0.06) + Math.floor(gameState.son.maxHp / 40);
+    ensureNetworkState();
+    const buddyBonus = Math.max(0, Math.floor(gameState.son.network?.buddy?.cpBonus || 0));
     const injuryMul = gameState.son.injury?.cpMul ?? 1.0;
-    return Math.max(1, Math.floor(base * getLevelMultiplier() * getConditionMultiplier() * injuryMul));
+    const total = Math.floor(base * getLevelMultiplier() * getConditionMultiplier() * injuryMul) + buddyBonus;
+    return Math.max(1, total);
 }
 
 function getTrainingTypeFromDummyModel() {
@@ -5280,6 +5408,7 @@ function updateUI() {
         ensureFurnitureState();
         ensureSonGrowthState();
         ensureSonBehaviorState();
+        ensureNetworkState();
         ensureKitchenState();
         ensureShopState();
         ensureLibraryState();
@@ -5410,6 +5539,7 @@ function updateUI() {
             if (jobEl) jobEl.innerText = j.title;
             if (jobSubEl) jobSubEl.innerHTML = j.subHtml || '';
         }
+        renderSonNetworkUI();
         const s = gameState.son.stats || {};
         const setNum = (id, v) => {
             const el = document.getElementById(id);
@@ -6552,7 +6682,12 @@ function startAdventure() {
         buff: appliedBuff,
         job,
         sendoff: null,
-        photosSent: {}
+        photosSent: {},
+        storySeen: {},
+        storyRiskMul: 1.0,
+        storyLootMul: 1.0,
+        storyGoldMul: 1.0,
+        storyInjuryApplied: false
     };
     gameState.son.plannedGoal = null;
 
@@ -6720,6 +6855,371 @@ const sonPhotoMails = [
     }
 ];
 
+function pickName(list) {
+    if (!Array.isArray(list) || list.length === 0) return '누군가';
+    return list[Math.floor(Math.random() * list.length)];
+}
+
+function getPathLabel(path) {
+    if (path === 'strength') return '근력';
+    if (path === 'magic') return '마법';
+    if (path === 'archery') return '사격';
+    return '모험';
+}
+
+function addBuddyIfNone(buddy) {
+    ensureNetworkState();
+    const n = gameState.son.network;
+    if (n.buddy) return false;
+    if (!buddy || typeof buddy !== 'object' || !buddy.id || !buddy.name) return false;
+    n.buddy = {
+        id: String(buddy.id),
+        name: String(buddy.name),
+        desc: String(buddy.desc || ''),
+        cpBonus: Math.max(0, Math.floor(buddy.cpBonus || 0)),
+        adventuresLeft: Math.max(1, Math.floor(buddy.adventuresLeft || 1))
+    };
+    return true;
+}
+
+function consumeBuddyAfterAdventure() {
+    ensureNetworkState();
+    const n = gameState.son.network;
+    if (!n.buddy) return null;
+    const name = n.buddy.name || '동료';
+    n.buddy.adventuresLeft = Math.max(0, Math.floor((n.buddy.adventuresLeft || 0) - 1));
+    if (n.buddy.adventuresLeft <= 0) {
+        n.buddy = null;
+        showToast(`🧑‍🤝‍🧑 ${name}와의 동행이 끝났습니다.`, 'info');
+        addMail(`📮 소식: ${name}와 헤어졌어요`, `엄마… ${name}랑은 여기까지 같이 하기로 했어요.<br>그래도… 다음에 또 만날 수 있겠죠?`);
+        return { left: true, name };
+    }
+    return { left: false, name, remaining: n.buddy.adventuresLeft };
+}
+
+function maybeBuildAdventureStoryLetter(adv, ctx) {
+    // Returns { title, textHtml, effects: [] } or null.
+    if (!adv || typeof adv !== 'object') return null;
+    ensureNetworkState();
+    ensureSonGrowthState();
+
+    if (!adv.storySeen || typeof adv.storySeen !== 'object') adv.storySeen = {};
+    if (!Number.isFinite(adv.storyRiskMul)) adv.storyRiskMul = 1.0;
+    if (!Number.isFinite(adv.storyLootMul)) adv.storyLootMul = 1.0;
+    if (!Number.isFinite(adv.storyGoldMul)) adv.storyGoldMul = 1.0;
+    if (typeof adv.storyInjuryApplied !== 'boolean') adv.storyInjuryApplied = false;
+    const seen = adv.storySeen;
+    const zone = ctx?.zone;
+    const mission = ctx?.mission;
+    const diffKey = ctx?.diffKey || 'normal';
+
+    const p = gameState.son.personality || {};
+    const a = gameState.son.affinity || {};
+    const { topKey, margin } = getTrainingMasteryTop();
+    const stage = getJobStage();
+    const calm = clampInt(p.calmness ?? 50, 0, 100);
+    const brave = clampInt(p.bravery ?? 50, 0, 100);
+    const moral = clampInt(p.morality ?? 50, 0, 100);
+    const flex = clampInt(p.flexibility ?? 50, 0, 100);
+    const trust = clampInt(a.trust ?? 50, 0, 100);
+    const affection = clampInt(a.affection ?? 50, 0, 100);
+
+    const mentorIdOf = (path) => `mentor_${path}`;
+    const hasMentor = (path) => (gameState.son.network?.contacts || []).some(c => c && c.id === mentorIdOf(path));
+
+    const weights = [
+        { id: 'mentor', w: 18 + (stage >= 1 ? 6 : 0) + (mission?.id === 'boss' ? 4 : 0) - (hasMentor(topKey) ? 10 : 0) },
+        { id: 'friend', w: 16 + Math.floor((affection - 50) / 10) + Math.floor((flex - 50) / 10) },
+        { id: 'kindness', w: 14 + Math.floor((moral - 50) / 10) + (mission?.id === 'gather' ? 2 : 0) },
+        { id: 'treasure', w: 12 + (zone?.id === 'ruins' ? 6 : 0) + (mission?.id === 'boss' ? 2 : 0) },
+        { id: 'rumor', w: 12 + (mission?.id === 'boss' ? 5 : 0) + (zone?.id === 'mountain' ? 2 : 0) },
+        { id: 'homesick', w: 11 + Math.floor((affection - 50) / 10) + (diffKey === 'risky' ? 1 : 0) },
+        { id: 'injury', w: 10 + (diffKey === 'risky' ? 8 : 0) + Math.floor((brave - 50) / 10) + Math.floor((50 - calm) / 10) - (adv.startedInjury ? 8 : 0) },
+        { id: 'flower', w: 12 + Math.floor((moral - 50) / 10) + (zone?.id === 'meadow' ? 6 : 0) },
+        { id: 'life', w: 14 + Math.floor((calm - 50) / 10) + (diffKey === 'risky' ? 2 : 0) },
+        { id: 'career', w: 14 + (margin >= 3 ? 5 : 0) + (stage >= 1 ? 2 : 0) },
+        { id: 'near_miss', w: 10 + (diffKey === 'risky' ? 6 : 0) + (brave >= 60 ? 2 : 0) }
+    ].map(x => ({ ...x, w: Math.max(0, x.w) }))
+        .filter(x => x.w > 0 && !seen[x.id]);
+
+    if (!weights.length) return null;
+    // Story should feel common, but not always.
+    const baseStoryChance = 0.72;
+    if (Math.random() > baseStoryChance) return null;
+
+    const picked = rollFromWeights(weights);
+    const storyId = picked?.id;
+    if (!storyId) return null;
+    seen[storyId] = true;
+
+    const effects = [];
+    const line = (s) => String(s || '').replace(/\n/g, '<br>');
+
+    if (storyId === 'mentor') {
+        const path = (topKey === 'strength' || topKey === 'magic' || topKey === 'archery') ? topKey : (Math.random() < 0.34 ? 'strength' : Math.random() < 0.67 ? 'magic' : 'archery');
+        const mentorNames = {
+            strength: ['검술 선생님 하르트', '방패술의 이렌', '노장 전사 브루노'],
+            magic: ['마도사 세라', '정령술사 리브', '수도승 아드리안'],
+            archery: ['명사수 라일', '사냥꾼 미아', '숲지기 로웰']
+        };
+        const mentorName = pickName(mentorNames[path] || mentorNames.magic);
+        const mid = mentorIdOf(path);
+        const existed = hasMentor(path);
+        upsertNetworkContact({
+            id: mid,
+            kind: 'mentor',
+            name: mentorName,
+            desc: existed ? `가끔 조언을 해주는 선생님이에요.` : `모험 중 만난 ${getPathLabel(path)} 선생님이에요.`,
+            tags: [path, 'mentor']
+        });
+        const tm = gameState.son.trainingMastery;
+        const inc = existed ? 2 : 4;
+        tm[path] = clampInt((tm[path] || 0) + inc, 0, 999);
+        if (path === 'magic') {
+            gameState.son.stats.magicAtk = clampInt((gameState.son.stats.magicAtk || 0) + (existed ? 0 : 1), 0, 999);
+            p.intelligence = clampInt((p.intelligence ?? 50) + 2, 0, 100);
+            p.calmness = clampInt((p.calmness ?? 50) + 1, 0, 100);
+        } else if (path === 'strength') {
+            gameState.son.stats.physAtk = clampInt((gameState.son.stats.physAtk || 0) + (existed ? 0 : 1), 0, 999);
+            p.endurance = clampInt((p.endurance ?? 50) + 2, 0, 100);
+            p.diligence = clampInt((p.diligence ?? 50) + 1, 0, 100);
+        } else {
+            gameState.son.stats.accuracy = clampInt((gameState.son.stats.accuracy || 0) + (existed ? 0 : 1), 0, 999);
+            p.focus = clampInt((p.focus ?? 50) + 2, 0, 100);
+            p.diligence = clampInt((p.diligence ?? 50) + 1, 0, 100);
+        }
+        adv.storyRiskMul *= 0.96;
+        effects.push(`${getPathLabel(path)} 숙련 +${inc}`);
+        if (!existed) effects.push('인맥 +1(선생님)');
+        effects.push('부상위험 ↓');
+        const title = `📮 사건: 좋은 선생님을 만났어요`;
+        const text = `${mentorName}을(를) 만났어요.<br>“작은 팁 하나가, 큰 차이를 만든단다.”<br><br>엄마… 저도 조금은… 더 잘할 수 있을 것 같아요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'friend') {
+        const friendNames = ['여행자 노아', '견습 모험가 레나', '상인집 아이 모리', '숲의 길잡이 소라', '도서관 소년 루카'];
+        const fname = pickName(friendNames);
+        const fid = `friend_${fname.replace(/\s+/g, '_')}`;
+        upsertNetworkContact({
+            id: fid,
+            kind: 'friend',
+            name: fname,
+            desc: `모험 중에 친해진 친구예요.`,
+            tags: ['friend']
+        });
+        p.flexibility = clampInt((p.flexibility ?? 50) + 1, 0, 100);
+        a.trust = clampInt((a.trust ?? 50) + 1, 0, 100);
+        a.affection = clampInt((a.affection ?? 50) + 1, 0, 100);
+        effects.push('인맥 +1(친구)');
+
+        // Sometimes: the friend joins for a few adventures.
+        const cpBonus = 12 + Math.floor((trust + affection) / 20) * 2; // ~12~24
+        const joined = (Math.random() < 0.55) && addBuddyIfNone({
+            id: `buddy_${fid}`,
+            name: fname,
+            desc: '며칠만 같이 다니기로 했어요.',
+            cpBonus,
+            adventuresLeft: 3
+        });
+        if (joined) effects.push(`동료 합류(CP +${cpBonus})`);
+        adv.storyLootMul *= 1.06;
+        adv.storyRiskMul *= 0.96;
+        effects.push('전리품 ↑');
+
+        const title = `📮 사건: 친구가 생겼어요`;
+        const text = `엄마, 오늘은 ${fname}을(를) 만났어요.<br>같이 길을 걷다 보니까… 이상하게 마음이 놓였어요.<br><br>다음에는… 더 무서운 곳도 같이 가볼 수 있을 것 같아요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'kindness') {
+        const npcs = [
+            { id: 'npc_healer', name: '약초꾼 할머니', desc: '길에서 만난 약초꾼이에요. 상처를 살짝 봐주셨어요.' },
+            { id: 'npc_guard', name: '성문 경비 로엔', desc: '낯선 곳에서도 따뜻하게 말을 건네준 사람이에요.' },
+            { id: 'npc_merchant', name: '떠돌이 상인 에리', desc: '필요한 것과 불필요한 것을 구분하는 법을 알려준 사람이에요.' }
+        ];
+        const npc = npcs[Math.floor(Math.random() * npcs.length)];
+        upsertNetworkContact({ id: npc.id, kind: 'friend', name: npc.name, desc: npc.desc, tags: ['kindness'] });
+        p.morality = clampInt((p.morality ?? 50) + 2, 0, 100);
+        p.flexibility = clampInt((p.flexibility ?? 50) + 1, 0, 100);
+        a.trust = clampInt((a.trust ?? 50) + 1, 0, 100);
+        effects.push('선함 +2');
+        effects.push('인맥 +1');
+
+        // A tiny “thank you” material (helps crafting feel alive).
+        const giftPool = zone?.id === 'forest'
+            ? ['wolf_fang', 'monster_bone']
+            : zone?.id === 'ruins'
+                ? ['relic_fragment', 'magic_crystal']
+                : zone?.id === 'mountain'
+                    ? ['steel', 'wyvern_scale']
+                    : zone?.id === 'dragon_lair'
+                        ? ['steel', 'magic_crystal']
+                        : ['herb', 'leather'];
+        const giftKey = giftPool[Math.floor(Math.random() * giftPool.length)];
+        ensureLootKey(giftKey);
+        gameState.parent.loot[giftKey].count += 1;
+        effects.push(`${gameState.parent.loot[giftKey].name} x1`);
+        adv.storyGoldMul *= 1.02;
+
+        const title = `📮 사건: 작은 친절을 배웠어요`;
+        const text = `엄마… 오늘은 길에서 누군가를 조금 도와줬어요.<br>${npc.name}이(가) “너도 많이 컸구나”라고 말해줬어요.<br><br>이상하게… 마음이 따뜻해져서, 발걸음이 가벼웠어요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'treasure') {
+        const lines = [
+            '낡은 상자를 발견했어요. 열어보는 데 손이 떨렸어요.',
+            '바닥에 반짝이는 게 보여서… 조심히 주웠어요.',
+            '벽 틈에서 작은 빛이 새어 나왔어요. 이상했지만… 멈출 수가 없었어요.'
+        ];
+        const pickedLine = pickName(lines);
+        const pool = zone?.id === 'ruins'
+            ? ['relic_fragment', 'magic_crystal']
+            : zone?.id === 'mountain'
+                ? ['wyvern_scale', 'steel']
+                : zone?.id === 'dragon_lair'
+                    ? ['magic_crystal', 'steel']
+                    : zone?.id === 'forest'
+                        ? ['wolf_fang', 'monster_bone']
+                        : ['herb', 'leather'];
+        const key = pool[Math.floor(Math.random() * pool.length)];
+        ensureLootKey(key);
+        gameState.parent.loot[key].count += 1;
+        adv.storyLootMul *= 1.10;
+        p.bravery = clampInt((p.bravery ?? 50) + 1, 0, 100);
+        effects.push(`${gameState.parent.loot[key].name} x1`);
+        effects.push('전리품 ↑');
+        const title = `📮 발견: 반짝이는 걸 찾았어요`;
+        const text = `엄마! ${pickedLine}<br><br>무서웠지만… 손을 뻗었어요. 그리고, 진짜로 찾았어요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'rumor') {
+        ensureWorldCodexState();
+        const entry = zone?.id ? gameState.parent.worldCodex.zones[zone.id] : null;
+        const gain = 4 + (mission?.id === 'boss' ? 3 : 0);
+        if (entry) {
+            entry.intel = Math.max(0, Math.min(100, Math.floor((entry.intel || 0) + gain)));
+        }
+        adv.storyRiskMul *= 0.96;
+        effects.push(`도감 탐험도 +${gain}%`);
+        effects.push('부상위험 ↓');
+        const storyteller = pickName(['낯선 노인', '여행자', '수도원의 수련생', '광산의 노동자']);
+        upsertNetworkContact({
+            id: `inspiration_${zone?.id || 'unknown'}`,
+            kind: 'inspiration',
+            name: `${storyteller}의 이야기`,
+            desc: '던전의 소문을 전해준 인연이에요.',
+            tags: ['rumor']
+        });
+        const boss = zone?.id ? zoneBosses[zone.id] : null;
+        const bossHint = boss ? `${boss.emoji} ${boss.name}` : '보스';
+        const title = `📮 소문: ${zone?.name || '던전'} 이야기`;
+        const text = `엄마, 쉬는 곳에서 ${storyteller}을(를) 만났어요.<br>${bossHint}에 대한 얘기를 들었어요.<br><br>“겁내지 말고, 먼저 주변을 잘 살펴.”<br>…나도 그렇게 해볼게요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'homesick') {
+        const lines = [
+            '엄마… 이상하게 오늘은 더 보고 싶었어요.',
+            '엄마가 해준 말이 자꾸 생각났어요. 그래서 버틸 수 있었어요.',
+            '엄마, 돌아가면… 꼭 같이 밥 먹어요.'
+        ];
+        const pickedLine = pickName(lines);
+        a.affection = clampInt((a.affection ?? 50) + 2, 0, 100);
+        p.calmness = clampInt((p.calmness ?? 50) + 1, 0, 100);
+        effects.push('애정 +2');
+        const title = `📮 안부: 엄마 생각`;
+        const text = `${pickedLine}<br><br>모험은 멋지지만… 집이 더 멋진 것 같아요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'injury') {
+        // Apply a light injury mid-adventure: it changes CP and makes “care at home” meaningful.
+        const risky = diffKey === 'risky';
+        const sev = (risky && Math.random() < 0.20) ? '중상' : '경미';
+        applyInjury(sev);
+        adv.storyInjuryApplied = true;
+        adv.storyRiskMul *= 0.92; // becomes more careful
+        adv.storyLootMul *= 0.95; // less capacity to loot
+        p.bravery = clampInt((p.bravery ?? 50) - 1, 0, 100);
+        p.diligence = clampInt((p.diligence ?? 50) + 1, 0, 100);
+        effects.push(`부상: ${sev}`);
+        effects.push('성실 +1');
+        const lines = [
+            '엄마… 조금 다쳤어요. 크게는 아니에요.',
+            '엄마… 넘어졌는데, 괜찮아요. (진짜로!)',
+            '엄마, 오늘은 무리하면 안 될 것 같아요…'
+        ];
+        const pickedLine = pickName(lines);
+        const title = `📮 사건: 다쳤어요`;
+        const text = `${pickedLine}<br><br>조금 쉬었다가… 다시 움직일게요. 걱정하지 마세요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'flower') {
+        ensureLootKey('pretty_flower');
+        gameState.parent.loot.pretty_flower.count += 1;
+        a.affection = clampInt((a.affection ?? 50) + 2, 0, 100);
+        p.morality = clampInt((p.morality ?? 50) + 1, 0, 100);
+        p.calmness = clampInt((p.calmness ?? 50) + 1, 0, 100);
+        effects.push('🌸 예쁜 꽃 x1');
+        const title = `📮 선물: 예쁜 꽃을 찾았어요`;
+        const text = `엄마… 예쁜 꽃을 발견했어요.<br>돌아가면… 엄마한테 꼭 드릴래요.<br><br>(오늘은 마음이 조금 따뜻해졌어요.)`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'life') {
+        const lines = [
+            '엄마, 오늘은… “어른이 되는 게 뭘까” 생각했어요.',
+            '엄마… 모험은 멋지지만 가끔은 외로워요.',
+            '엄마, 내가 잘하고 있는 걸까요?',
+            '엄마, 사람들을 지키는 게… 생각보다 어렵네요.'
+        ];
+        const pickedLine = pickName(lines);
+        p.calmness = clampInt((p.calmness ?? 50) + 1, 0, 100);
+        p.diligence = clampInt((p.diligence ?? 50) + 1, 0, 100);
+        a.trust = clampInt((a.trust ?? 50) + 1, 0, 100);
+        effects.push('차분 +1');
+        const title = `📮 고민: 인생에 대해 생각했어요`;
+        const text = `${pickedLine}<br><br>그래도… 엄마가 믿어준다고 생각하면, 다시 한 걸음 나아갈 수 있어요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    if (storyId === 'career') {
+        const roleToAsp = (k) => (k === 'strength' ? 'strength' : k === 'magic' ? 'magic' : 'archery');
+        const asp = roleToAsp(topKey);
+        gameState.son.network.aspiration = asp;
+        const tm = gameState.son.trainingMastery;
+        tm[asp] = clampInt((tm[asp] || 0) + 2, 0, 999);
+        if (asp === 'archery') p.focus = clampInt((p.focus ?? 50) + 1, 0, 100);
+        if (asp === 'magic') p.intelligence = clampInt((p.intelligence ?? 50) + 1, 0, 100);
+        if (asp === 'strength') p.endurance = clampInt((p.endurance ?? 50) + 1, 0, 100);
+        effects.push(`꿈: ${getPathLabel(asp)}`);
+        const title = `📮 깨달음: 진로가 떠올랐어요`;
+        const text = `엄마… 오늘 ${getPathLabel(asp)}를 정말 멋지게 하는 사람을 봤어요.<br>저도… 그런 사람이 되고 싶어졌어요!<br><br>조금씩, 그 길로 가볼게요.`;
+        return { title, textHtml: line(text), effects };
+    }
+
+    // near_miss
+    {
+        const lines = [
+            '엄마… 방금 큰 소리가 나서 심장이 철렁했어요.',
+            '엄마! 거의 넘어질 뻔했는데, 침착하게 피했어요.',
+            '엄마… 오늘은 무리하면 안 되겠다고 느꼈어요.',
+            '엄마, 긴장했지만… 끝까지 버텼어요.'
+        ];
+        const pickedLine = pickName(lines);
+        p.diligence = clampInt((p.diligence ?? 50) + 1, 0, 100);
+        p.bravery = clampInt((p.bravery ?? 50) - 1, 0, 100);
+        effects.push('성실 +1');
+        const title = `📮 사건: 아찔한 순간이 있었어요`;
+        const text = `${pickedLine}<br><br>그래도 괜찮아요. 엄마가 해준 말… 떠올리면서 버텼어요.`;
+        return { title, textHtml: line(text), effects };
+    }
+}
+
 function pickPhotoMailForAdventure(adv) {
     const zoneId = adv?.zoneId;
     const missionId = adv?.missionId;
@@ -6792,7 +7292,11 @@ function maybeSendAdventureMail(ticks, totalTicks) {
         `📮 안부: ${zone.emoji} ${zone.name}`,
         `📮 소식: ${mission.emoji} ${mission.name}`,
         `📮 짧은 편지`,
-        `📮 안부 편지`
+        `📮 안부 편지`,
+        `📮 오늘의 하늘`,
+        `📮 작은 승리`,
+        `📮 메모`,
+        `📮 엄마에게`
     ];
     const title = titles[Math.floor(Math.random() * titles.length)];
     const templates = [
@@ -6802,10 +7306,35 @@ function maybeSendAdventureMail(ticks, totalTicks) {
         `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
         `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`,
         `엄마, 오늘은 하늘이 예뻐요. ${zone.name}에서 잠깐 멈췄어요.`,
-        `엄마! 나 진짜 조금씩 강해지는 것 같아요. 돌아가면 보여줄게요!`
+        `엄마! 나 진짜 조금씩 강해지는 것 같아요. 돌아가면 보여줄게요!`,
+        `엄마, 잠깐 쉬는 중이에요. 물 마시고 다시 움직일게요.`,
+        `엄마… 방금 지나가던 사람들이 “멋지다” 했어요. (진짜예요!)`,
+        `엄마! 오늘은 발자국이 많아요. 뭔가… 큰 게 있는 것 같아요.`,
+        `엄마, 냄새가 좋아서… 괜히 웃었어요. 집 생각나서요.`,
+        `엄마! 제 배낭이 좀 무거워졌어요. 뭔가 챙겨갈 수 있을 것 같아요.`,
+        `엄마… 조금 긴장되지만, 해낼게요. 엄마가 믿어주니까요.`,
+        `엄마! ${mission.name} 하다 보니까… 생각보다 재미있어요.`
     ];
 
-    if (attachPhoto) {
+    const story = maybeBuildAdventureStoryLetter(adv, { zone, mission, diffKey });
+
+    if (story) {
+        let img = null;
+        if (attachPhoto) {
+            const p = pickPhotoMailForAdventure(adv);
+            if (p && p.img) {
+                adv.photosSent[p.id] = true;
+                ensureMailPhotoHistory();
+                gameState.parent.mailPhotoHistory.unshift(p.id);
+                gameState.parent.mailPhotoHistory = gameState.parent.mailPhotoHistory.slice(0, 12);
+                img = p.img;
+            }
+        }
+        const effLine = (story.effects && story.effects.length)
+            ? `<br><br><span style="color:#64748b; font-size:0.78rem;">성장: ${story.effects.join(' · ')}</span>`
+            : '';
+        addMail(story.title, `${story.textHtml}${effLine}`, img ? { img } : false);
+    } else if (attachPhoto) {
         const p = pickPhotoMailForAdventure(adv);
         if (p && p.img) {
             adv.photosSent[p.id] = true;
@@ -6840,6 +7369,7 @@ window.encourageSon = encourageSon;
 
 function completeAdventure() {
     const cp = getSonCombatPower();
+    const adv = gameState.son.adventure || {};
     const diffKey = gameState.son.adventure?.difficulty || 'normal';
     const diff = difficultyData[diffKey] || difficultyData.normal;
     const zone = getZoneById(gameState.son.adventure?.zoneId);
@@ -6877,10 +7407,14 @@ function completeAdventure() {
     if (job?.goldMul) finalGold = Math.floor(finalGold * job.goldMul);
     if (sendoff?.goldMul) finalGold = Math.floor(finalGold * sendoff.goldMul);
     if (seals?.goldMul) finalGold = Math.floor(finalGold * seals.goldMul);
+    // Story can shift rewards slightly (kept small to avoid balance swings).
+    const storyGoldMul = Math.max(0.9, Math.min(1.1, Number.isFinite(adv.storyGoldMul) ? adv.storyGoldMul : 1.0));
+    finalGold = Math.max(0, Math.floor(finalGold * storyGoldMul));
 
     const lootResults = [];
     const lootPasses = (rebellionMaverick ? 2 : 1) + (mission.id === 'gather' ? 1 : 0) + (outcome === 'great' ? 1 : 0);
-    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0) * (seals?.lootMul ?? 1.0);
+    const storyLootMul = Math.max(0.9, Math.min(1.12, Number.isFinite(adv.storyLootMul) ? adv.storyLootMul : 1.0));
+    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0) * (seals?.lootMul ?? 1.0) * storyLootMul;
     let zoneDropHits = 0;
     let nonSeedHits = 0;
 
@@ -7002,7 +7536,9 @@ function completeAdventure() {
     const jobRiskMul = job?.riskMul ?? 1.0;
     const sendoffRiskMul = sendoff?.riskMul ?? 1.0;
     const sealRiskMul = seals?.riskMul ?? 1.0;
-    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul * sendoffRiskMul * sealRiskMul);
+    const storyRiskMul = Math.max(0.9, Math.min(1.25, Number.isFinite(adv.storyRiskMul) ? adv.storyRiskMul : 1.0));
+    const storyInjuryDampen = (adv.storyInjuryApplied === true) ? 0.62 : 1.0;
+    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul * sendoffRiskMul * sealRiskMul * storyRiskMul * storyInjuryDampen);
     if (Math.random() < finalRisk) {
         const severityRoll = Math.random();
         const deepFail = score < 0.7 ? 1 : 0;
@@ -7091,6 +7627,7 @@ function completeAdventure() {
                 gameState.son.personality.diligence = clampInt((gameState.son.personality.diligence || 50) + 1, 0, 100);
                 sonSpeech("알겠어요…!");
             }
+            consumeBuddyAfterAdventure();
             updateUI();
         }
     });
