@@ -700,7 +700,13 @@ window.specialOrderSmithy = specialOrderSmithy;
 const recipes = [
     { id: 'steak', name: '🥩 최고급 스테이크', desc: '허기 MAX · EXP +30', needs: { meat: 1, salt: 1 }, type: 'kitchen' },
     { id: 'homemade_meal', name: '🍲 집밥 정식', desc: '허기 +80 · 애정 +3', needs: { carrot: 2, tomato: 1, salt: 1 }, type: 'kitchen' },
-    { id: 'herb_potion', name: '🧪 약초 물약', desc: 'HP +60 · 허기 +20', needs: { herb: 2 }, type: 'kitchen' }
+    { id: 'herb_potion', name: '🧪 약초 물약', desc: 'HP +60 · 허기 +20', needs: { herb: 2 }, type: 'kitchen' },
+    // Seal-unlocked meals (growth tree)
+    { id: 'herb_tea', name: '🍵 허브티', desc: '다음 모험: 부상위험↓ · 컨디션↑', needs: { herb: 1, salt: 1 }, type: 'kitchen', requiresSeal: 'meadow' },
+    { id: 'wolf_jerky', name: '🥓 늑대 육포', desc: '다음 모험: 전리품↑', needs: { meat: 1, salt: 1 }, type: 'kitchen', requiresSeal: 'forest' },
+    { id: 'rune_cookie', name: '🍪 룬 쿠키', desc: '다음 모험: EXP↑', needs: { tomato: 1, salt: 1 }, type: 'kitchen', requiresSeal: 'ruins' },
+    { id: 'wind_stew', name: '🍲 바람 스튜', desc: '다음 모험: 부상위험↓', needs: { carrot: 1, tomato: 1, salt: 1 }, type: 'kitchen', requiresSeal: 'mountain' },
+    { id: 'dragon_broth', name: '🍜 고룡 육수', desc: '다음 모험: 골드/전리품/EXP↑', needs: { meat: 1, herb: 1, salt: 1 }, type: 'kitchen', requiresSeal: 'dragon_lair' }
 ];
 
 const ingredientNames = {
@@ -731,7 +737,13 @@ const bookCatalog = [
     { id: 'book_spell', grade: 'A', name: '📗 정령문법', cost: 560, topics: ['magic', 'discipline'], effects: { intelligence: 2, magicAtk: 2, magicRes: 1 }, desc: '지능/마공/마저' },
     { id: 'book_knight', grade: 'A', name: '📕 기사도 수련', cost: 490, topics: ['strength', 'discipline'], effects: { physAtk: 2, endurance: 2, diligence: 1 }, desc: '물공/인내/성실' },
     { id: 'book_legend', grade: 'S', name: '📜 전설의 기록: 빛의 수호자', cost: 980, topics: ['adventure', 'magic'], effects: { magicAtk: 2, magicRes: 2, trust: 2, exp: 50 }, desc: '희귀 · 성장 큰 폭' },
-    { id: 'book_hunter', grade: 'S', name: '🦌 명사수의 이야기', cost: 920, topics: ['archery', 'adventure'], effects: { accuracy: 2, agility: 2, bravery: 2 }, desc: '희귀 · 사격/대담' }
+    { id: 'book_hunter', grade: 'S', name: '🦌 명사수의 이야기', cost: 920, topics: ['archery', 'adventure'], effects: { accuracy: 2, agility: 2, bravery: 2 }, desc: '희귀 · 사격/대담' },
+    // Seal-unlocked books (growth tree)
+    { id: 'book_meadow', grade: 'B', name: '🌼 포근한 낮잠 노트', cost: 260, topics: ['life', 'discipline'], effects: { calmness: 2, affection: 2 }, desc: '인장 해금 · 차분/애정', requiresSeal: 'meadow' },
+    { id: 'book_forest', grade: 'B', name: '🌲 숲의 발자국', cost: 300, topics: ['adventure', 'archery'], effects: { focus: 2, agility: 1, bravery: 1 }, desc: '인장 해금 · 집중/민첩/대담', requiresSeal: 'forest' },
+    { id: 'book_ruins', grade: 'A', name: '🏛️ 룬 문자 해독', cost: 620, topics: ['magic', 'discipline'], effects: { intelligence: 2, magicAtk: 1, exp: 35 }, desc: '인장 해금 · 지능/마공/EXP', requiresSeal: 'ruins' },
+    { id: 'book_mountain', grade: 'A', name: '🏔️ 바람을 버티는 법', cost: 580, topics: ['strength', 'discipline'], effects: { endurance: 2, maxHp: 12, diligence: 1 }, desc: '인장 해금 · 인내/체력/성실', requiresSeal: 'mountain' },
+    { id: 'book_dragon', grade: 'S', name: '🐉 고룡 관찰 일지', cost: 1100, topics: ['adventure', 'discipline'], effects: { bravery: 2, trust: 2, exp: 80 }, desc: '인장 해금 · 대담/신뢰/EXP', requiresSeal: 'dragon_lair', requiresStage: 1 }
 ];
 
 const bookById = (() => {
@@ -739,6 +751,15 @@ const bookById = (() => {
     for (const b of bookCatalog) m[b.id] = b;
     return m;
 })();
+
+function isBookUnlocked(book) {
+    if (!book) return false;
+    const seal = book.requiresSeal;
+    if (seal && !isBossSealCrafted(seal)) return false;
+    const stage = Number.isFinite(book.requiresStage) ? book.requiresStage : 0;
+    if (stage > 0 && getJobStage() < stage) return false;
+    return true;
+}
 
 function ensureLibraryState() {
     if (!gameState.parent.library || typeof gameState.parent.library !== 'object') {
@@ -810,7 +831,7 @@ function rollBookstoreStock() {
     ensureShopState();
     ensureLibraryState();
     const lib = gameState.parent.library;
-    const pool = bookCatalog.filter(b => !lib.owned[b.id]);
+    const pool = bookCatalog.filter(b => !lib.owned[b.id] && isBookUnlocked(b));
     const pickUnique = (arr, n) => {
         const copy = [...arr];
         const out = [];
@@ -825,14 +846,26 @@ function rollBookstoreStock() {
     const rares = pool.filter(b => b.grade === 'A' || b.grade === 'S');
     const stock = [];
 
-    stock.push(...pickUnique(commons, 3));
+    // Slight bias: if the son has a clear training path, include a relevant book more often.
+    const { topKey, margin } = getTrainingMasteryTop();
+    const stage = getJobStage();
+    const prefers = (b) => (b?.topics || []).includes(topKey);
+    const hasClearPath = stage >= 1 || margin >= 3;
+    if (hasClearPath) {
+        const preferPool = commons.filter(prefers);
+        if (preferPool.length) stock.push(pickUnique(preferPool, 1)[0]);
+    }
+    stock.push(...pickUnique(commons.filter(b => !stock.includes(b)), 3 - stock.length));
     if (rares.length) {
         const r = rollFromWeights([
             { grade: 'A', w: 85 },
             { grade: 'S', w: 15 }
         ]);
         const candidates = pool.filter(b => b.grade === r.grade);
-        if (candidates.length) stock.push(pickUnique(candidates, 1)[0]);
+        // Prefer rare book aligned with the path, if any.
+        const preferRare = candidates.filter(prefers);
+        if (hasClearPath && preferRare.length) stock.push(pickUnique(preferRare, 1)[0]);
+        else if (candidates.length) stock.push(pickUnique(candidates, 1)[0]);
         else stock.push(pickUnique(rares, 1)[0]);
     } else if (commons.length) {
         stock.push(pickUnique(commons, 1)[0]);
@@ -893,6 +926,10 @@ function renderBookstoreUI() {
     }
 
     let html = '';
+    const hint = getSonBookTasteHint();
+    if (hint) {
+        html += `<div class="hint-card" style="margin-top:10px;"><b>💡 아들의 취향</b><div style="margin-top:6px; font-size:0.78rem; color:#475569; line-height:1.4;">${hint}</div></div>`;
+    }
     for (const b of stock) {
         const g = bookGradeInfo[b.grade] || bookGradeInfo.C;
         const owned = !!lib.owned[b.id];
@@ -1098,6 +1135,34 @@ function computeBookInterest(book, slotBias = 0) {
     const m = gameState.son.trainingMastery || {};
     const norm = (v) => Math.max(0, Math.min(1, (v || 0) / 100));
     const mastery = (v) => Math.max(0, Math.min(1, (v || 0) / 80));
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+    // Growth-tree bias: objective / seals / job stage gently nudge what the son "wants" to read.
+    const topicBoost = { strength: 0, magic: 0, archery: 0, discipline: 0, life: 0, adventure: 0 };
+    const o = gameState.son.objective;
+    if (o?.type === 'boss') {
+        topicBoost.adventure += 0.07;
+        topicBoost.discipline += 0.05;
+        topicBoost.strength += 0.04;
+    } else if (o?.type === 'intel') {
+        topicBoost.life += 0.07;
+        topicBoost.discipline += 0.04;
+        topicBoost.magic += 0.02;
+    } else if (o) {
+        topicBoost.adventure += 0.04;
+        topicBoost.discipline += 0.02;
+    }
+
+    const stage = getJobStage();
+    const { topKey, margin } = getTrainingMasteryTop();
+    const hasClearPath = stage >= 1 || margin >= 3;
+    if (hasClearPath && topKey) topicBoost[topKey] += (stage >= 2 ? 0.10 : 0.07);
+
+    if (isBossSealCrafted('meadow')) { topicBoost.life += 0.04; topicBoost.discipline += 0.02; }
+    if (isBossSealCrafted('forest')) { topicBoost.archery += 0.04; topicBoost.adventure += 0.02; }
+    if (isBossSealCrafted('ruins')) { topicBoost.magic += 0.04; topicBoost.discipline += 0.02; }
+    if (isBossSealCrafted('mountain')) { topicBoost.strength += 0.04; topicBoost.discipline += 0.02; }
+    if (isBossSealCrafted('dragon_lair')) { topicBoost.adventure += 0.04; topicBoost.discipline += 0.04; }
     const desire = {
         strength: 0.55 * norm(p.endurance) + 0.45 * mastery(m.strength),
         magic: 0.55 * norm(p.intelligence) + 0.45 * mastery(m.magic),
@@ -1108,9 +1173,32 @@ function computeBookInterest(book, slotBias = 0) {
     };
     const topics = book.topics || [];
     if (!topics.length) return 0;
-    const base = topics.reduce((acc, t) => acc + (desire[t] ?? 0), 0) / topics.length;
+    const base = topics.reduce((acc, t) => acc + clamp01((desire[t] ?? 0) + (topicBoost[t] ?? 0)), 0) / topics.length;
     const score = (base * 0.82) + (Math.max(0, Math.min(1, slotBias)) * 0.18);
     return Math.max(0, Math.min(1, score));
+}
+
+function getSonBookTasteHint() {
+    const labels = {
+        strength: '근력/기사',
+        magic: '마법/지식',
+        archery: '사격/집중',
+        discipline: '규율/성실',
+        life: '생활/마음',
+        adventure: '모험/용기'
+    };
+    const { topKey, margin } = getTrainingMasteryTop();
+    const stage = getJobStage();
+    const o = gameState.son.objective;
+    const parts = [];
+
+    if (stage >= 1 || margin >= 3) parts.push(`${labels[topKey] || topKey} 책`);
+    if (o?.type === 'boss') parts.push(`${labels.adventure} 책`);
+    if (o?.type === 'intel') parts.push(`${labels.life} 책`);
+
+    if (!parts.length) return '';
+    const uniq = [...new Set(parts)].slice(0, 2);
+    return `요즘 아들은 <b>${uniq.join('</b> / <b>')}</b>에 더 관심이 있을지도 몰라요.`;
 }
 
 function applyBookEffects(book) {
@@ -2109,6 +2197,11 @@ function renderLongTermGoals(planZoneId) {
 function isSupportPinDone(pin) {
     if (!pin || typeof pin !== 'object') return false;
     if (pin.type === 'treat') return !gameState.son.injury;
+    if (pin.type === 'craftSeal') {
+        const zoneId = pin.zoneId;
+        if (!zoneId) return false;
+        return isBossSealCrafted(zoneId);
+    }
     if (pin.type === 'craftGear') {
         const slot = pin.slot;
         const tier = Math.max(1, Math.min(10, Math.floor(pin.tier || 1)));
@@ -2162,6 +2255,14 @@ function renderSupportPinUI(plan) {
         const cost = gameState.son.injury?.hospitalCost || 0;
         title = `🏥 치료하기`;
         sub = gameState.son.injury ? `부상: ${gameState.son.injury.label || '부상'} · 비용 ${cost}G` : `부상이 없어요.`;
+    } else if (pin.type === 'craftSeal') {
+        const def = bossSealDefs?.[pin.zoneId];
+        const z = getZoneById(pin.zoneId);
+        title = `🏆 인장 제작: ${def?.name || '인장'}`;
+        const effect = def ? describeSealEffects(def.effects) : '';
+        sub = def
+            ? `${z.emoji} ${z.name}${effect ? ` · ${effect}` : ''}<br>${needsText(def.needs)}`
+            : '';
     } else if (pin.type === 'craftGear') {
         const step = buildGearRecipe(pin.slot, Math.max(1, Math.min(10, Math.floor(pin.tier || 1))));
         title = `🧵 제작: ${step.name}`;
@@ -2211,6 +2312,16 @@ function renderSupportSuggestionsUI(plan) {
     const suggestions = [];
     if (gameState.son.injury) suggestions.push({ type: 'treat' });
 
+    // If craftable: suggest boss seal crafting (unlocks growth-tree content)
+    const craftableSeals = zones
+        .map(z => z.id)
+        .filter(id => bossSealDefs?.[id] && !isBossSealCrafted(id) && canCraftNeeds(bossSealDefs[id].needs));
+    if (craftableSeals.length) {
+        const prefer = plan?.zone?.id;
+        const pick = (prefer && craftableSeals.includes(prefer)) ? prefer : craftableSeals[0];
+        suggestions.push({ type: 'craftSeal', zoneId: pick });
+    }
+
     // If struggling: prioritize armor upgrades
     const score = plan ? (plan.cp / Math.max(1, plan.zone.recCP)) : 1;
     if (plan && score < 1.0) {
@@ -2237,7 +2348,7 @@ function renderSupportSuggestionsUI(plan) {
     if (sandbagCount <= 0) suggestions.push({ type: 'buySandbag' });
 
     const uniq = [];
-    const keyOf = (s) => `${s.type}:${s.slot || ''}:${s.tier || ''}:${s.recipeId || ''}:${s.weaponId || ''}`;
+    const keyOf = (s) => `${s.type}:${s.zoneId || ''}:${s.slot || ''}:${s.tier || ''}:${s.recipeId || ''}:${s.weaponId || ''}`;
     const seen = new Set();
     for (const s of suggestions) {
         const k = keyOf(s);
@@ -2259,6 +2370,12 @@ function renderSupportSuggestionsUI(plan) {
             const cost = gameState.son.injury?.hospitalCost || 0;
             title = `🏥 치료하기`;
             sub = `부상 회복 (비용 ${cost}G)`;
+        } else if (s.type === 'craftSeal') {
+            const def = bossSealDefs?.[s.zoneId];
+            const z = getZoneById(s.zoneId);
+            const effect = def ? describeSealEffects(def.effects) : '';
+            title = `🏆 인장: ${def?.name || '인장'}`;
+            sub = def ? `${z.emoji} ${z.name}${effect ? ` · ${effect}` : ''}<br>${needsText(def.needs)}` : '';
         } else if (s.type === 'craftGear') {
             const step = buildGearRecipe(s.slot, s.tier);
             title = `🧵 제작: ${step.name}`;
@@ -3255,6 +3372,12 @@ function goToSupportPin() {
         setSonTab('summary');
         return;
     }
+    if (pin.type === 'craftSeal') {
+        setMainView('town');
+        openTownSection('smith');
+        setSmithyTab('craft');
+        return;
+    }
     if (pin.type === 'craftGear' || pin.type === 'craftMilestone') {
         setMainView('town');
         openTownSection('smith');
@@ -3452,26 +3575,42 @@ function openKitchenCookMenu() {
     }
 
     recipes.forEach(recipe => {
+        const unlocked = isRecipeUnlocked(recipe);
         const can = canCookRecipe(recipe);
+        const sealDef = recipe.requiresSeal ? bossSealDefs?.[recipe.requiresSeal] : null;
+        const lockLine = !unlocked
+            ? `<div style="margin-top:6px; font-size:0.72rem; font-weight:1000; color:#f59e0b;">🔒 ${sealDef?.name || '인장'} 제작 필요</div>`
+            : '';
+
         const div = document.createElement('div');
-        div.style.cssText = `display:flex; justify-content:space-between; align-items:center; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px; ${can ? '' : 'opacity:0.8;'}`;
+        const opacity = !unlocked ? 0.55 : (can ? 1.0 : 0.85);
+        div.style.cssText = `display:flex; justify-content:space-between; align-items:center; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px; opacity:${opacity};`;
         div.innerHTML = `
           <div style="flex:1; font-size:0.82rem;">
             <div style="font-weight:1000; color:#0f172a;">${recipe.name} <span style="color:#64748b; font-size:0.75rem;">(${recipe.desc})</span></div>
             <div style="margin-top:6px; font-size:0.75rem;">${needsTextFromRecipe(recipe)}</div>
+            ${lockLine}
           </div>
         `;
         const btn = document.createElement('button');
         btn.className = 'action-btn';
-        btn.style.cssText = 'width:auto; padding:8px 12px; margin:0; font-size:0.78rem; background:#10b981;';
-        btn.disabled = !can;
-        btn.innerText = can ? '조리 시작' : '재료 부족';
+        const enabled = unlocked && can;
+        btn.style.cssText = `width:auto; padding:8px 12px; margin:0; font-size:0.78rem; background:${enabled ? '#10b981' : '#94a3b8'};`;
+        btn.disabled = !enabled;
+        btn.innerText = !unlocked ? '잠김' : (can ? '조리 시작' : '재료 부족');
         btn.onclick = () => startKitchenCooking(recipe.id);
         div.appendChild(btn);
         els.invList.appendChild(div);
     });
 
     els.invModal.style.display = 'flex';
+}
+
+function isRecipeUnlocked(recipe) {
+    if (!recipe) return false;
+    const seal = recipe.requiresSeal;
+    if (!seal) return true;
+    return isBossSealCrafted(seal);
 }
 
 function startKitchenCooking(recipeId) {
@@ -3488,6 +3627,11 @@ function startKitchenCooking(recipeId) {
     }
     const recipe = recipes.find(r => r.id === recipeId);
     if (!recipe) return;
+    if (!isRecipeUnlocked(recipe)) {
+        const def = recipe.requiresSeal ? bossSealDefs?.[recipe.requiresSeal] : null;
+        showToast(`🔒 아직 해금되지 않은 레시피입니다. (${def?.name || '인장'} 제작 필요)`, 'warning');
+        return;
+    }
     if (!canCookRecipe(recipe)) {
         showToast("재료가 부족합니다!", 'error');
         return;
@@ -6523,6 +6667,7 @@ function handleActionCompletion() {
         maybeProcFromBedAfterSleep();
     } else if (gameState.son.state === 'EATING') {
         const placed = gameState.rooms['room-table'].placedItem;
+        let mealBuff = null;
         if (placed === 'steak') {
             sonSpeech("스테이크 최고!");
             gameState.son.hunger = gameState.son.maxHunger;
@@ -6546,6 +6691,53 @@ function handleActionCompletion() {
             showToast(`🧪 약초 물약: HP +${hpGain} · 허기 +20`, 'success');
             gameState.rooms['room-table'].placedItem = null;
             updateKitchenSlotUI();
+        } else if (placed === 'herb_tea') {
+            sonSpeech("따뜻하다…");
+            gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 35);
+            gameState.son.personality.calmness = clampInt((gameState.son.personality.calmness || 50) + 2, 0, 100);
+            gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 50) + 1, 0, 100);
+            showToast("🍵 허브티: 허기 +35 · 차분 +2 · 애정 +1", 'success');
+            mealBuff = { id: 'herb_tea', name: '허브티', desc: '다음 모험에서 덜 다치고, 컨디션이 좋아져요.', riskMul: 0.90, fatigueAdd: 0.06, source: 'meal' };
+            gameState.rooms['room-table'].placedItem = null;
+            updateKitchenSlotUI();
+        } else if (placed === 'wolf_jerky') {
+            sonSpeech("든든해!");
+            gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 55);
+            gameState.son.personality.bravery = clampInt((gameState.son.personality.bravery || 50) + 1, 0, 100);
+            showToast("🥓 늑대 육포: 허기 +55 · 대담 +1", 'success');
+            mealBuff = { id: 'wolf_jerky', name: '늑대 육포', desc: '다음 모험에서 전리품을 더 잘 챙겨옵니다.', lootMul: 1.14, source: 'meal' };
+            gameState.rooms['room-table'].placedItem = null;
+            updateKitchenSlotUI();
+        } else if (placed === 'rune_cookie') {
+            sonSpeech("머리가 맑아지는 느낌!");
+            gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 45);
+            gameState.son.exp += 10;
+            gameState.son.personality.intelligence = clampInt((gameState.son.personality.intelligence || 50) + 1, 0, 100);
+            showToast("🍪 룬 쿠키: 허기 +45 · EXP +10 · 지능 +1", 'success');
+            mealBuff = { id: 'rune_cookie', name: '룬 쿠키', desc: '다음 모험에서 EXP가 늘고, 부상 위험이 아주 조금 줄어듭니다.', expMul: 1.16, riskMul: 0.97, source: 'meal' };
+            gameState.rooms['room-table'].placedItem = null;
+            updateKitchenSlotUI();
+        } else if (placed === 'wind_stew') {
+            sonSpeech("몸이 가볍다!");
+            const hpGain = Math.floor(20 * healMul);
+            gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + hpGain);
+            gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 75);
+            gameState.son.personality.endurance = clampInt((gameState.son.personality.endurance || 50) + 1, 0, 100);
+            showToast(`🍲 바람 스튜: HP +${hpGain} · 허기 +75 · 인내 +1`, 'success');
+            mealBuff = { id: 'wind_stew', name: '바람 스튜', desc: '다음 모험에서 부상 위험이 줄고, 덜 지칩니다.', riskMul: 0.86, fatigueAdd: 0.05, source: 'meal' };
+            gameState.rooms['room-table'].placedItem = null;
+            updateKitchenSlotUI();
+        } else if (placed === 'dragon_broth') {
+            sonSpeech("…엄청 진하다!");
+            const hpGain = Math.floor(25 * healMul);
+            gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + hpGain);
+            gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 90);
+            gameState.son.exp += 20;
+            gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 50) + 1, 0, 100);
+            showToast(`🍜 고룡 육수: HP +${hpGain} · 허기 +90 · EXP +20 · 신뢰 +1`, 'gold');
+            mealBuff = { id: 'dragon_broth', name: '고룡 육수', desc: '다음 모험의 보상이 전반적으로 좋아집니다.', goldMul: 1.08, lootMul: 1.08, expMul: 1.12, riskMul: 0.92, fatigueAdd: 0.05, source: 'meal' };
+            gameState.rooms['room-table'].placedItem = null;
+            updateKitchenSlotUI();
         } else {
             const recovery = Math.floor((upgradeData.table.effects[tableLv - 1] + healBonus) * healMul);
             sonSpeech("밥 다 먹었다...");
@@ -6553,6 +6745,7 @@ function handleActionCompletion() {
             showToast(`🍽️ 기본 식사 허기 +${recovery}`, 'success');
         }
         maybeProcFromTableAfterMeal();
+        if (mealBuff) setNextAdventureBuff(mealBuff);
     } else if (gameState.son.state === 'TRAINING') {
         const baseExp = upgradeData.dummy.effects[dummyLv - 1];
         const trainingType = resolveTrainingType();
@@ -7023,35 +7216,26 @@ function updateCookUI() {
             return `<span style="color:${color}">${nm} ${have}/${v}</span>`;
         }).join(' ');
 
+        const unlocked = isRecipeUnlocked(recipe);
         const canCook = Object.entries(recipe.needs).every(([k, v]) => (gameState.parent.harvestBag[k] || 0) >= v);
+        const sealDef = recipe.requiresSeal ? bossSealDefs?.[recipe.requiresSeal] : null;
+        const lockText = !unlocked ? `<div style="margin-top:4px; font-size:0.72rem; color:#f59e0b; font-weight:900;">🔒 ${sealDef?.name || '인장'} 제작 필요</div>` : '';
 
         div.innerHTML = `
             <div style="font-size:0.8rem;">
                 <b>${recipe.name}</b> <span style="color:#64748b; font-size:0.75rem;">(${recipe.desc})</span><br>
                 <span style="font-size:0.75rem;">${needsText}</span>
+                ${lockText}
             </div>
-            ${canCook ? `<button class="action-btn" style="width:auto; padding:4px 12px; margin:0; font-size:0.75rem; background:#10b981;" onclick="cookRecipe('${recipe.id}')">요리</button>` : ''}
+            <button class="action-btn" style="width:auto; padding:4px 12px; margin:0; font-size:0.75rem; background:${(unlocked && canCook) ? '#10b981' : '#94a3b8'};" ${(!unlocked || !canCook) ? 'disabled' : ''} onclick="cookRecipe('${recipe.id}')">${!unlocked ? '잠김' : (canCook ? '조리 시작' : '재료 부족')}</button>
         `;
         els.cookList.appendChild(div);
     });
 }
 
 function cookRecipe(recipeId) {
-    const recipe = recipes.find(r => r.id === recipeId);
-    if (!recipe) return;
-    const canCook = Object.entries(recipe.needs).every(([k, v]) => (gameState.parent.harvestBag[k] || 0) >= v);
-    if (!canCook) {
-        showToast("재료가 부족합니다!", 'error');
-        return;
-    }
-    // Consume ingredients
-    Object.entries(recipe.needs).forEach(([k, v]) => {
-        gameState.parent.harvestBag[k] -= v;
-    });
-    // Add to inventory
-    gameState.parent.inventory[recipeId].count++;
-    showToast(`${recipe.name} 요리 완료!`, 'success');
-    updateUI();
+    // Legacy hook: keep behavior consistent with the kitchen timer & table placement flow.
+    startKitchenCooking(recipeId);
 }
 window.cookRecipe = cookRecipe;
 
