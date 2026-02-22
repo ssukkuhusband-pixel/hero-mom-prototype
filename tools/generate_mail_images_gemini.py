@@ -116,6 +116,16 @@ SPECS = [
     ("mail08_wolf", "The boy meeting a friendly wolf companion, peaceful moment, forest path."),
     ("mail09_smile", "Close-up portrait of the boy smiling warmly, holding a small heart-shaped charm, soft background."),
     ("mail10_dragon", "The boy seeing a distant dragon silhouette on the horizon (majestic, not terrifying), warm twilight."),
+    ("mail11_mentor", "The boy meeting a kind mentor adventurer (warrior/mage/archer) who teaches him a simple trick, friendly and cozy."),
+    ("mail12_friend", "The boy with a new friend adventurer, sharing a snack and laughing, warm camp vibe."),
+    ("mail13_bandage", "The boy showing a small bandage on his arm, sitting to rest safely, calm and reassuring."),
+    ("mail14_flower", "The boy holding a small bouquet of pretty wildflowers to bring home, meadow sunshine."),
+    ("mail15_map", "The boy holding a hand-drawn map and a small compass, discovering a new path, gentle adventurous mood."),
+    ("mail16_library", "The boy in an ancient library corridor with warm lantern light, looking at a mysterious but friendly book."),
+    ("mail17_ore", "The boy proudly holding a shiny ore/crystal he found near a forge-like cave, warm glow, not dangerous."),
+    ("mail18_rain", "The boy under a small umbrella or cloak in light rain, cozy and calm, soft puddle reflections."),
+    ("mail19_training", "The boy practicing archery or sword stance in a quiet clearing, determined but cute, warm sunset."),
+    ("mail20_nest", "The boy carefully looking at a bird/griffin nest from a distance, gentle curiosity, airy sky background."),
 ]
 
 
@@ -133,12 +143,13 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     ref_b64 = b64_png(REFERENCE)
 
+    total = len(SPECS)
     for idx, (sid, scene) in enumerate(SPECS, start=1):
         out_base = OUT_DIR / f"{safe_filename(sid)}"
         existing = list(OUT_DIR.glob(f"{out_base.name}.*"))
         if existing:
             # Keep deterministic outputs unless user wants regeneration.
-            print(f"[{idx:02d}/10] exists: {existing[0].name} (skip)")
+            print(f"[{idx:02d}/{total:02d}] exists: {existing[0].name} (skip)")
             continue
 
         prompt = f"{STYLE}\n\nScene: {scene}\n\nFraming: 1:1 square, centered character, cozy background."
@@ -156,13 +167,34 @@ def main() -> int:
             },
         }
 
-        print(f"[{idx:02d}/10] generating: {sid} ...")
+        print(f"[{idx:02d}/{total:02d}] generating: {sid} ...")
         resp = http_post_json(ENDPOINT, api_key, payload, timeout_s=180)
         img_bytes, mime = extract_first_image(resp)
         ext = ext_from_mime(mime)
         out_path = OUT_DIR / f"{out_base.name}{ext}"
         out_path.write_bytes(img_bytes)
-        print(f"  -> wrote {out_path.relative_to(ROOT)} ({mime}, {len(img_bytes)} bytes)")
+        # Prefer .jpg for web consistency (optional; requires pillow).
+        wrote_path = out_path
+        if wrote_path.suffix.lower() != ".jpg":
+            try:
+                from PIL import Image  # type: ignore
+                from io import BytesIO
+
+                im = Image.open(BytesIO(img_bytes))
+                if im.mode != "RGB":
+                    im = im.convert("RGB")
+                jpg_path = OUT_DIR / f"{out_base.name}.jpg"
+                im.save(jpg_path, format="JPEG", quality=90, optimize=True)
+                try:
+                    out_path.unlink()
+                except Exception:
+                    pass
+                wrote_path = jpg_path
+                mime = "image/jpeg"
+            except Exception:
+                pass
+
+        print(f"  -> wrote {wrote_path.relative_to(ROOT)} ({mime}, {wrote_path.stat().st_size} bytes)")
         time.sleep(0.5)  # gentle pacing to avoid rate limits
 
     print("Done.")
@@ -171,4 +203,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

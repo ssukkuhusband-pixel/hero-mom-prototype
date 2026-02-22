@@ -6921,15 +6921,95 @@ const sonPhotoMails = [
         title: '📮 사진: 엄마 생각',
         text: '엄마 생각나서 사진 보내요.\n돌아가면 꼭 안아줘요!'
     },
-    {
-        id: 'mail10_dragon',
-        zoneId: 'dragon_lair',
-        missionId: 'boss',
-        img: 'assets/mail/mail10_dragon.jpg',
-        title: '📮 사진: 멀리서 본 고룡',
-        text: '엄마… 저 멀리서 진짜 큰 걸 봤어요.\n조금 무서웠지만, 눈을 못 떼겠더라고요.'
-    }
-];
+	    {
+	        id: 'mail10_dragon',
+	        zoneId: 'dragon_lair',
+	        missionId: 'boss',
+	        img: 'assets/mail/mail10_dragon.jpg',
+	        title: '📮 사진: 멀리서 본 고룡',
+	        text: '엄마… 저 멀리서 진짜 큰 걸 봤어요.\n조금 무서웠지만, 눈을 못 떼겠더라고요.'
+	    },
+	    {
+	        id: 'mail11_mentor',
+	        zoneId: 'library',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail11_mentor.jpg',
+	        title: '📮 사진: 좋은 선생님',
+	        text: '엄마! 오늘은 선생님 같은 분을 만났어요.\n짧게 배웠는데… 머리가 “띵” 했어요!'
+	    },
+	    {
+	        id: 'mail12_friend',
+	        zoneId: 'creek',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail12_friend.jpg',
+	        title: '📮 사진: 새 친구',
+	        text: '엄마, 오늘 친구가 생겼어요.\n같이 웃다 보니까… 덜 무서웠어요.'
+	    },
+	    {
+	        id: 'mail13_bandage',
+	        zoneId: 'den',
+	        missionId: 'hunt',
+	        img: 'assets/mail/mail13_bandage.jpg',
+	        title: '📮 사진: 괜찮아요',
+	        text: '엄마… 살짝 긁혔는데 괜찮아요!\n조심해서 쉬고 다시 움직일게요.'
+	    },
+	    {
+	        id: 'mail14_flower',
+	        zoneId: 'meadow',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail14_flower.jpg',
+	        title: '📮 사진: 예쁜 꽃',
+	        text: '엄마! 길에서 꽃이 너무 예뻐서요.\n집에 가져가면… 엄마가 좋아할 것 같았어요.'
+	    },
+	    {
+	        id: 'mail15_map',
+	        zoneId: 'ruins',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail15_map.jpg',
+	        title: '📮 사진: 지도',
+	        text: '엄마, 길을 표시해뒀어요.\n다음에 오면… 더 잘 찾을 수 있을 것 같아요!'
+	    },
+	    {
+	        id: 'mail16_library',
+	        zoneId: 'library',
+	        missionId: 'boss',
+	        img: 'assets/mail/mail16_library.jpg',
+	        title: '📮 사진: 오래된 도서관',
+	        text: '엄마… 여기 책들이 조용히 숨 쉬는 것 같아요.\n괜히 목소리도 작아져요.'
+	    },
+	    {
+	        id: 'mail17_ore',
+	        zoneId: 'forge',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail17_ore.jpg',
+	        title: '📮 사진: 반짝이는 조각',
+	        text: '엄마! 반짝이는 걸 찾았어요.\n이걸로… 뭐 만들 수 있을까요?'
+	    },
+	    {
+	        id: 'mail18_rain',
+	        zoneId: 'pass',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail18_rain.jpg',
+	        title: '📮 사진: 비 오는 길',
+	        text: '엄마, 비가 와요.\n근데… 비 냄새가 좋아서 조금 마음이 편해졌어요.'
+	    },
+	    {
+	        id: 'mail19_training',
+	        zoneId: 'cliff',
+	        missionId: 'hunt',
+	        img: 'assets/mail/mail19_training.jpg',
+	        title: '📮 사진: 연습 중!',
+	        text: '엄마! 잠깐 연습했어요.\n나중에… 더 멋지게 보여줄게요!'
+	    },
+	    {
+	        id: 'mail20_nest',
+	        zoneId: 'aerie',
+	        missionId: 'gather',
+	        img: 'assets/mail/mail20_nest.jpg',
+	        title: '📮 사진: 하늘의 둥지',
+	        text: '엄마… 여기 둥지가 있었어요.\n가까이 가진 않았어요. 그냥… 조용히 보고 왔어요.'
+	    }
+	];
 
 function pickName(list) {
     if (!Array.isArray(list) || list.length === 0) return '누군가';
