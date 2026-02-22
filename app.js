@@ -750,6 +750,43 @@ function demoEnsureFirstCraftOpportunity(lootResults) {
     }
 }
 
+function countCraftableNowAll() {
+    // Craftability across all smithy craft systems (gear tiers, milestone weapons, seals).
+    let c = 0;
+    try {
+        // Gear tiers (helmet/armor/boots)
+        for (const slot of (craftConfig?.slots || [])) {
+            for (let tier = 1; tier <= (craftConfig?.tierCount || 0); tier++) {
+                const r = buildGearRecipe(slot, tier);
+                const inv = gameState.parent.gearInventory?.[slot] || {};
+                const hasPrev = !r.needsGear || ((inv[r.needsGear.id]?.count || 0) >= (r.needsGear.count || 1));
+                if (hasPrev && canCraftNeeds(r.needs)) c += 1;
+            }
+        }
+        // Milestone weapons
+        for (const m of (craftConfig?.milestoneWeapons || [])) {
+            if (canCraftNeeds(m.needs)) c += 1;
+        }
+        // Boss seals
+        for (const z of zones) {
+            const def = bossSealDefs?.[z.id];
+            if (!def) continue;
+            if (isBossSealCrafted(z.id)) continue;
+            if (canCraftNeeds(def.needs)) c += 1;
+        }
+    } catch (e) {}
+    return Math.max(0, Math.floor(c));
+}
+
+function openSonGrowthPanel() {
+    setMainView('son');
+    setSonTab('summary');
+    const el = document.getElementById('son-growth-details');
+    if (el) el.open = true;
+    updateUI();
+}
+window.openSonGrowthPanel = openSonGrowthPanel;
+
 function noteSonUiUpdate(kind, amount = 1) {
     ensureUiBadgeState();
     const k = (kind === 'world' || kind === 'network') ? kind : null;
@@ -8314,10 +8351,15 @@ function completeAdventure() {
 
     const zoneLine = `${zone.emoji} ${zone.name} · ${mission.emoji} ${mission.name}`;
     const diffLine = `${diff.name} · CP ${cp} (권장CP ${zone.recCP})`;
+
+    ensureObjectiveState();
+    const objective = gameState.son.objective;
+    const prog = objective ? getObjectiveProgress(objective) : null;
+
     const injuryLine = gameState.son.injury
         ? `🩹 부상: ${gameState.son.injury.label || '부상'} (${gameState.son.injury.severity || ''})`
         : `🩹 부상 없음`;
-    const lootLine = lootResults.length ? `📦 전리품: ${lootResults.join(', ')}` : `📦 전리품 없음`;
+    const lootLine = lootResults.length ? lootResults.join(', ') : '없음';
     const sendoffLine =
         sendoff?.id === 'bye_warm' ? '👋 인사: 잘 다녀와 (골드 약간 증가)' :
         sendoff?.id === 'bye_careful' ? '👋 인사: 조심해 (부상 위험 감소)' :
@@ -8330,32 +8372,50 @@ function completeAdventure() {
     const encourageLine = gameState.son.adventureEncouraged ? '💌 응원 보너스: 적용(+20%)' : '';
     const maverickLine = rebellionMaverick ? '🌟 고집이 발동해 예상 밖의 성과를 냈습니다.' : '';
 
-    const summaryLines = [
-        `<b>결과</b>\n${outcomeText}`,
-        `<b>보상</b>\n💰 +${finalGold}G · ⭐ +${adventureExp} EXP`,
-        lootLine,
-        injuryLine,
-        encourageLine,
-        buffLine,
-        sealLine,
-        jobLine,
-        sendoffLine,
-        maverickLine
-    ].filter(Boolean).join('\n\n');
+    const updates = [];
+    if (codexResult.firstDiscovery) updates.push(`🗺️ 도감: ${zone.name}`);
+    if (codexResult.firstBoss) updates.push(`👑 보스 기록`);
+    const netBadge = Math.max(0, gameState.parent.uiBadges?.network || 0);
+    if (netBadge > 0) updates.push(`🤝 인맥 업데이트`);
+    const updateLine = updates.length ? updates.join(' · ') : '없음';
+
+    const craftableNow = countCraftableNowAll();
+    const craftBtnLabel = craftableNow > 0 ? `🧵 제작 (${craftableNow})` : '🧵 제작';
+
+    const objectiveHtml = prog
+        ? `<div style="font-weight:1000; color:#0f172a;">${prog.done ? '✅ ' : ''}${prog.label}</div>${prog.sub ? `<div style="margin-top:4px; font-size:0.78rem; color:#64748b;">${prog.sub}</div>` : ''}`
+        : `<div style="font-size:0.78rem; color:#64748b;">목표가 없어요.</div>`;
+
+    const summaryHtml = `
+      <div><b>결과</b><div style="margin-top:6px; font-weight:1000;">${outcomeText}</div></div>
+      <div style="margin-top:10px;"><b>보상</b><div style="margin-top:6px;">💰 +${finalGold}G · ⭐ +${adventureExp} EXP</div></div>
+      <div style="margin-top:10px;"><b>전리품</b><div style="margin-top:6px; color:#475569;">${lootLine}</div></div>
+      <div style="margin-top:10px;"><b>상태</b><div style="margin-top:6px; color:#475569;">${[injuryLine, encourageLine, buffLine, sealLine, jobLine, sendoffLine, maverickLine].filter(Boolean).join(' · ') || '-'}</div></div>
+      <div style="margin-top:10px;"><b>목표</b><div style="margin-top:6px;">${objectiveHtml}</div></div>
+      <div style="margin-top:10px;"><b>업데이트</b><div style="margin-top:6px; color:#64748b;">${updateLine}</div></div>
+      <div style="margin-top:10px;"><b>바로가기</b>
+        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="mini-btn secondary" type="button" onclick="resolveTravelModal('welcome_praise', { goto: 'smithCraft' })">${craftBtnLabel}</button>
+          <button class="mini-btn secondary" type="button" onclick="resolveTravelModal('welcome_praise', { goto: 'sonWorld' })">🗺️ 도감</button>
+          <button class="mini-btn secondary" type="button" onclick="resolveTravelModal('welcome_praise', { goto: 'sonGrowth' })">🤝 인맥</button>
+        </div>
+        <div style="margin-top:6px; font-size:0.75rem; color:#94a3b8;">바로가기는 기본 인사(“고생했어~”)로 처리됩니다.</div>
+      </div>
+    `;
 
     openTravelModal({
         title: '🏠 귀환',
         sub: `${zoneLine} · ${diffLine}`,
         imgSrc: 'assets/pixel/son_idle.png',
         dialogue: buildReturnDialogue(outcome, pct, { injured: !!gameState.son.injury }),
-        summary: summaryLines,
+        summary: summaryHtml,
         actions: [
             { id: 'welcome_praise', label: '고생했어~' },
             { id: 'welcome_check', label: '잘 다녀왔어?' },
             { id: 'welcome_food', label: '얼른 씻고 밥먹어', variant: 'secondary' }
         ],
         defaultId: 'welcome_praise',
-        onResolve: (choiceId) => {
+        onResolve: (choiceId, meta) => {
             if (choiceId === 'welcome_praise') {
                 gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 2, 0, 100);
                 gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 1, 0, 100);
@@ -8372,6 +8432,17 @@ function completeAdventure() {
             }
             consumeBuddyAfterAdventure();
             updateUI();
+            const goto = meta?.goto;
+            if (goto === 'smithCraft') {
+                setMainView('town');
+                openTownSection('smith');
+                setSmithyTab('craft');
+            } else if (goto === 'sonWorld') {
+                setMainView('son');
+                setSonTab('world');
+            } else if (goto === 'sonGrowth') {
+                openSonGrowthPanel();
+            }
         }
     });
 }
