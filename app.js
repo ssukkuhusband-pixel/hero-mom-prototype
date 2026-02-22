@@ -2608,6 +2608,14 @@ function getJobInfo() {
     const tm = gameState.son.trainingMastery;
     const p = gameState.son.personality;
     const s = gameState.son.stats;
+    const lv = clampInt(gameState.son.level || 1, 1, 999);
+    const stage = getJobStage();
+    const stageTxt = jobStageLabel(stage);
+    const { topV } = getTrainingMasteryTop();
+    const nextTxt =
+        stage >= 2 ? `<span style="color:#10b981;">✅ 전직 최고 단계</span>` :
+        stage >= 1 ? `다음 전직: Lv.10 & 숙련 22 (현재 Lv.${lv} · 숙련 ${topV})` :
+        `전직 조건: Lv.5 & 숙련 10 (현재 Lv.${lv} · 숙련 ${topV})`;
 
     const entries = [
         { key: 'strength', v: tm.strength || 0, name: '근력' },
@@ -2629,7 +2637,7 @@ function getJobInfo() {
     if (maxV < 4 || margin < 2) {
         return {
             title: `🧑‍🌾 ${tier} 모험가`,
-            subHtml: `근력 ${tm.strength || 0} · 마법 ${tm.magic || 0} · 사격 ${tm.archery || 0}<br><span style="color:#64748b;">아직은 다양한 길을 고민 중이에요.</span>`
+            subHtml: `근력 ${tm.strength || 0} · 마법 ${tm.magic || 0} · 사격 ${tm.archery || 0}<br><span style="color:#64748b;">아직은 다양한 길을 고민 중이에요.</span><br><span style="color:#64748b;">전직 단계: <b>${stageTxt}</b> · ${nextTxt}</span>`
         };
     }
 
@@ -2639,8 +2647,8 @@ function getJobInfo() {
             ? '부상 위험 감소 · 귀환 컨디션 소폭 상승'
             : '골드 소폭 증가 · 부상 위험 소폭 감소';
         return {
-            title: `${role} (${tier})`,
-            subHtml: `근력 숙련 ${tm.strength || 0} · 최대HP ${gameState.son.maxHp} · 물공 ${s.physAtk || 0} · 인내 ${p.endurance}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+            title: `${role} (${tier} · ${stageTxt})`,
+            subHtml: `근력 숙련 ${tm.strength || 0} · 최대HP ${gameState.son.maxHp} · 물공 ${s.physAtk || 0} · 인내 ${p.endurance}<br><span style="color:#64748b;">모험 특성: ${perk}</span><br><span style="color:#64748b;">${nextTxt}</span>`
         };
     }
     if (top.key === 'magic') {
@@ -2649,8 +2657,8 @@ function getJobInfo() {
             ? '부상 위험 감소 · 귀환 컨디션 상승'
             : 'EXP 증가 · 전리품 소폭 증가';
         return {
-            title: `${role} (${tier})`,
-            subHtml: `마법 숙련 ${tm.magic || 0} · 마공 ${s.magicAtk || 0} · 마저 ${s.magicRes || 0} · 지능 ${p.intelligence} · 차분 ${p.calmness}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+            title: `${role} (${tier} · ${stageTxt})`,
+            subHtml: `마법 숙련 ${tm.magic || 0} · 마공 ${s.magicAtk || 0} · 마저 ${s.magicRes || 0} · 지능 ${p.intelligence} · 차분 ${p.calmness}<br><span style="color:#64748b;">모험 특성: ${perk}</span><br><span style="color:#64748b;">${nextTxt}</span>`
         };
     }
     const role = p.focus >= 60 ? '🏹 궁수' : '🦌 사냥꾼';
@@ -2658,8 +2666,8 @@ function getJobInfo() {
         ? '전리품 증가 · 골드 소폭 증가 · 부상 위험 소폭 증가'
         : '전리품 소폭 증가 · EXP 소폭 증가';
     return {
-        title: `${role} (${tier})`,
-        subHtml: `사격 숙련 ${tm.archery || 0} · 물공 ${s.physAtk || 0} · 민첩 ${s.agility || 0} · 명중 ${s.accuracy || 0} · 집중 ${p.focus}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+        title: `${role} (${tier} · ${stageTxt})`,
+        subHtml: `사격 숙련 ${tm.archery || 0} · 물공 ${s.physAtk || 0} · 민첩 ${s.agility || 0} · 명중 ${s.accuracy || 0} · 집중 ${p.focus}<br><span style="color:#64748b;">모험 특성: ${perk}</span><br><span style="color:#64748b;">${nextTxt}</span>`
     };
 }
 
@@ -2688,11 +2696,54 @@ function getJobKey() {
     return (p.focus >= 60) ? 'archer' : 'hunter';
 }
 
+function getTrainingMasteryTop() {
+    ensureSonGrowthState();
+    const tm = gameState.son.trainingMastery;
+    const entries = [
+        { key: 'strength', v: tm.strength || 0 },
+        { key: 'magic', v: tm.magic || 0 },
+        { key: 'archery', v: tm.archery || 0 }
+    ].sort((a, b) => b.v - a.v);
+    const top = entries[0];
+    const second = entries[1];
+    const margin = (top?.v || 0) - (second?.v || 0);
+    return { topKey: top?.key || 'strength', topV: top?.v || 0, margin };
+}
+
+function getJobStage() {
+    // Stage is a “전직” feeling layered on top of the current job key.
+    const lv = clampInt(gameState.son.level || 1, 1, 999);
+    const { topV } = getTrainingMasteryTop();
+    if (lv >= 10 && topV >= 22) return 2;
+    if (lv >= 5 && topV >= 10) return 1;
+    return 0;
+}
+
+function jobStageLabel(stage) {
+    if (stage >= 2) return '2차 전직';
+    if (stage >= 1) return '1차 전직';
+    return '전직 전';
+}
+
+function scaleMulByStage(mul, stage) {
+    const m = Number.isFinite(mul) ? mul : 1.0;
+    const strength = stage >= 2 ? 1.75 : stage >= 1 ? 1.35 : 1.0;
+    return 1 + (m - 1) * strength;
+}
+
+function scaleAddByStage(add, stage) {
+    const a = Number.isFinite(add) ? add : 0;
+    const strength = stage >= 2 ? 1.5 : stage >= 1 ? 1.25 : 1.0;
+    return a * strength;
+}
+
 function getAdventureJobPerks() {
     const key = getJobKey();
+    const stage = getJobStage();
     const base = {
         key,
         name: '모험가',
+        stage,
         planRecMul: 1.0,
         wGatherAdd: 0,
         wHuntAdd: 0,
@@ -2705,10 +2756,35 @@ function getAdventureJobPerks() {
         desc: ''
     };
 
+    const finalize = (job) => {
+        const j = { ...job };
+        // Scale perks by stage (keeps early game gentle, late game more distinct).
+        j.planRecMul = scaleMulByStage(j.planRecMul, stage);
+        j.goldMul = scaleMulByStage(j.goldMul, stage);
+        j.expMul = scaleMulByStage(j.expMul, stage);
+        j.lootMul = scaleMulByStage(j.lootMul, stage);
+        j.riskMul = scaleMulByStage(j.riskMul, stage);
+        j.fatigueAdd = scaleAddByStage(j.fatigueAdd, stage);
+        j.wGatherAdd = scaleAddByStage(j.wGatherAdd, stage);
+        j.wHuntAdd = scaleAddByStage(j.wHuntAdd, stage);
+        j.wBossAdd = scaleAddByStage(j.wBossAdd, stage);
+
+        const stageNames = {
+            knight: ['견습 기사', '기사', '은빛 기사'],
+            guardian: ['견습 수호자', '수호자', '철벽 수호자'],
+            mage: ['견습 마법사', '마법사', '대마법사'],
+            priest: ['견습 사제', '사제', '고위 사제'],
+            hunter: ['견습 사냥꾼', '사냥꾼', '명사수'],
+            archer: ['견습 궁수', '궁수', '신궁']
+        };
+        if (stageNames[key]) j.name = stageNames[key][Math.min(2, Math.max(0, stage))];
+        j.desc = `${j.desc || ''}${j.desc ? ' · ' : ''}${jobStageLabel(stage)}`;
+        return j;
+    };
+
     if (key === 'knight') {
-        return {
+        return finalize({
             ...base,
-            name: '기사',
             planRecMul: 1.05,
             wGatherAdd: -0.06,
             wHuntAdd: 0.06,
@@ -2716,12 +2792,11 @@ function getAdventureJobPerks() {
             goldMul: 1.03,
             riskMul: 0.97,
             desc: '골드 소폭 증가 · 부상 위험 소폭 감소'
-        };
+        });
     }
     if (key === 'guardian') {
-        return {
+        return finalize({
             ...base,
-            name: '수호자',
             planRecMul: 1.02,
             wGatherAdd: -0.03,
             wHuntAdd: 0.03,
@@ -2729,12 +2804,11 @@ function getAdventureJobPerks() {
             riskMul: 0.92,
             fatigueAdd: 0.03,
             desc: '부상 위험 감소 · 귀환 컨디션 소폭 상승'
-        };
+        });
     }
     if (key === 'mage') {
-        return {
+        return finalize({
             ...base,
-            name: '마법사',
             planRecMul: 1.04,
             wGatherAdd: -0.04,
             wHuntAdd: 0.02,
@@ -2742,12 +2816,11 @@ function getAdventureJobPerks() {
             expMul: 1.06,
             lootMul: 1.02,
             desc: 'EXP 증가 · 전리품 소폭 증가'
-        };
+        });
     }
     if (key === 'priest') {
-        return {
+        return finalize({
             ...base,
-            name: '사제',
             planRecMul: 0.98,
             wGatherAdd: 0.08,
             wHuntAdd: -0.02,
@@ -2755,12 +2828,11 @@ function getAdventureJobPerks() {
             riskMul: 0.94,
             fatigueAdd: 0.04,
             desc: '부상 위험 감소 · 귀환 컨디션 상승'
-        };
+        });
     }
     if (key === 'hunter') {
-        return {
+        return finalize({
             ...base,
-            name: '사냥꾼',
             planRecMul: 1.03,
             wGatherAdd: 0.06,
             wHuntAdd: 0.04,
@@ -2769,12 +2841,11 @@ function getAdventureJobPerks() {
             goldMul: 1.02,
             riskMul: 1.03,
             desc: '전리품 증가 · 골드 소폭 증가 · 부상 위험 소폭 증가'
-        };
+        });
     }
     if (key === 'archer') {
-        return {
+        return finalize({
             ...base,
-            name: '궁수',
             planRecMul: 1.02,
             wGatherAdd: -0.03,
             wHuntAdd: 0.07,
@@ -2783,7 +2854,7 @@ function getAdventureJobPerks() {
             expMul: 1.02,
             riskMul: 1.02,
             desc: '전리품 소폭 증가 · EXP 소폭 증가'
-        };
+        });
     }
     return { ...base, name: '모험가', desc: '특수 효과 없음' };
 }
