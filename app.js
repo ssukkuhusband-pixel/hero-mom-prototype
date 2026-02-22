@@ -88,6 +88,18 @@ function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+function escapeHtml(value) {
+    const s = String(value ?? '');
+    return s.replace(/[&<>"']/g, (ch) => {
+        if (ch === '&') return '&amp;';
+        if (ch === '<') return '&lt;';
+        if (ch === '>') return '&gt;';
+        if (ch === '"') return '&quot;';
+        if (ch === "'") return '&#39;';
+        return ch;
+    });
+}
+
 // --- Game State ---
 const SAVE_KEY = 'hero_mom_2_save_v1';
 const DEFAULT_GAME_STATE = {
@@ -5425,202 +5437,7 @@ function updateUpgradeButtons(roomId) {
     }
 }
 
-// ============================================================
-// Quest System
-// ============================================================
-const questDB = [
-    { type: 'money', desc: "엄마, 저 용돈 100골드만 주세요!", timer: 30, reqGold: 100 },
-    { type: 'money', desc: "엄마! 마을에서 멋진 걸 봤는데 50골드만...", timer: 25, reqGold: 50 },
-    { type: 'food', desc: "엄마 배고파요. 뭐 좀 먹을 거 주세요!", timer: 60, reqItem: 'kitchen' },
-    { type: 'food', desc: "엄마, 맛있는 거 해주세요!", timer: 60, reqItem: 'kitchen' },
-    { type: 'equipment', desc: "엄마, 더 좋은 무기 없어요?", timer: 45, reqItem: 'weapon' },
-    { type: 'attention', desc: "엄마, 나 좀 봐주세요!", timer: 20, reqItem: 'none' }
-];
-
-function triggerRandomQuest() {
-    if (gameState.son.quest || Math.random() > 0.1) return;
-    const q = questDB[Math.floor(Math.random() * questDB.length)];
-    gameState.son.quest = { ...q, active: true, context: 'home' };
-    sonSpeech("엄마!! 부탁이 있어요!");
-    updateUI();
-}
-
-function handleQuestTick() {
-    if (!gameState.son.quest) return;
-    gameState.son.quest.timer--;
-    if (gameState.son.quest.timer <= 0) {
-        const ctx = gameState.son.quest.context || 'home';
-        if (ctx === 'adventure') {
-            addMail("📵 연락 실패", "모험 중 연락을 놓쳤습니다. 아들이 서운해합니다.");
-            gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 8);
-            gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 3);
-        } else {
-            sonSpeech("치.. 엄마 미워!");
-            addMail("부탁 거절", "아들의 부탁을 들어주지 않아 ⚡반항심이 올랐습니다.");
-            gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 15);
-            gameState.son.affinity.affection = Math.max(0, gameState.son.affinity.affection - 5);
-        }
-        closeQuestModal();
-        gameState.son.quest = null;
-    }
-    updateUI();
-}
-
-function openQuestModal() {
-    // Legacy alias: quest system was replaced by accumulated requests.
-    openRequestsModal();
-}
-window.openQuestModal = openQuestModal;
-
-function closeQuestModal() { els.questModal.style.display = 'none'; }
-
-// --- Quest helpers ---
-function checkQuestFulfillable(q) {
-    const ctx = q.context || 'home';
-    if (q.type === 'money') {
-        if (gameState.parent.gold >= q.reqGold) {
-            return { possible: true, label: `들어주기 (${q.reqGold}G)` };
-        }
-    } else if (q.type === 'food') {
-        const kitchenItems = Object.keys(gameState.parent.inventory).filter(k =>
-            gameState.parent.inventory[k].type === 'kitchen' && gameState.parent.inventory[k].count > 0
-        );
-        if (kitchenItems.length > 0) {
-            return { possible: true, label: `${gameState.parent.inventory[kitchenItems[0]].name} 주기` };
-        }
-        if (ctx !== 'adventure' && gameState.rooms['room-table'].placedItem) {
-            return { possible: true, label: '식탁 위 음식 주기' };
-        }
-    } else if (q.type === 'equipment') {
-        // Check if we have a weapon better than current
-        const tiers = ['C', 'B', 'A', 'S'];
-        const currentIdx = tiers.indexOf(gameState.son.equipment.weapon.tier);
-        for (let i = currentIdx + 1; i < tiers.length; i++) {
-            if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
-                return { possible: true, label: `${gameState.parent.weaponInventory[tiers[i]].name} 장착해주기` };
-            }
-        }
-    } else if (q.type === 'attention') {
-        return { possible: false }; // handled separately
-    }
-    return { possible: false };
-}
-
-function getExtendTime(q) {
-    if (q.type === 'food') return 60;
-    if (q.type === 'equipment') return 45;
-    if (q.type === 'money') return 30;
-    return 30;
-}
-
-function getQuestHint(q) {
-    if (q.type === 'food') {
-        return '💡 <b>힌트:</b> 마을에서 요리 재료를 사거나, 텃밭에서 수확해서 주방에서 요리하세요!';
-    } else if (q.type === 'equipment') {
-        return '💡 <b>힌트:</b> 대장간에서 무기를 뽑거나 합성하세요!';
-    } else if (q.type === 'money') {
-        return `💡 <b>힌트:</b> 바느질로 ${q.reqGold}G를 모으세요!`;
-    }
-    return '';
-}
-
-function extendQuest() {
-    const q = gameState.son.quest;
-    if (!q || q.extended) return;
-    q.extended = true;
-    const bonus = getExtendTime(q);
-    q.timer += bonus;
-    sonSpeech("알겠어요.. 빨리요 엄마!");
-    showToast(`⏳ 아들이 기다려줍니다! +${bonus}초`, 'info');
-    const ctx = q.context || 'home';
-    const trustCost = ctx === 'adventure' ? 1 : 2;
-    gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - trustCost); // slight trust cost
-    closeQuestModal();
-    updateUI();
-}
-
-function acceptQuest() {
-    const q = gameState.son.quest;
-    if (!q) return;
-    let success = false;
-    let bonusAffection = 10;
-    const ctx = q.context || 'home';
-
-    if (q.type === 'money' && gameState.parent.gold >= q.reqGold) {
-        gameState.parent.gold -= q.reqGold;
-        success = true;
-    } else if (q.type === 'food') {
-        const kitchenItems = Object.keys(gameState.parent.inventory).filter(k =>
-            gameState.parent.inventory[k].type === 'kitchen' && gameState.parent.inventory[k].count > 0
-        );
-        if (kitchenItems.length > 0) {
-            gameState.parent.inventory[kitchenItems[0]].count--;
-            success = true;
-        } else if (ctx !== 'adventure' && gameState.rooms['room-table'].placedItem) {
-            gameState.rooms['room-table'].placedItem = null;
-            updateKitchenSlotUI();
-            success = true;
-        }
-    } else if (q.type === 'equipment') {
-        const tiers = ['C', 'B', 'A', 'S'];
-        const currentIdx = tiers.indexOf(gameState.son.equipment.weapon.tier);
-        for (let i = currentIdx + 1; i < tiers.length; i++) {
-            if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
-                gameState.parent.weaponInventory[tiers[i]].count--;
-                const oldTier = gameState.son.equipment.weapon.tier;
-                gameState.parent.weaponInventory[oldTier].count++;
-                gameState.son.equipment.weapon = {
-                    id: `weapon_${tiers[i]}`,
-                    name: gameState.parent.weaponInventory[tiers[i]].name,
-                    atk: gameState.parent.weaponInventory[tiers[i]].atk,
-                    def: 0,
-                    tier: tiers[i]
-                };
-                bonusAffection = 15;
-                success = true;
-                break;
-            }
-        }
-    } else if (q.type === 'attention') {
-        success = true;
-        bonusAffection = 5;
-    }
-
-    if (success) {
-        if (ctx !== 'adventure') sonSpeech("우와! 엄마 최고 사랑해요!!");
-        gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + bonusAffection);
-        gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 5);
-        gameState.son.affinity.rebellion = Math.max(0, gameState.son.affinity.rebellion - 10);
-        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) + 1, 0, 100);
-        showToast(ctx === 'adventure' ? "모험 중 아들을 도왔습니다! 💌" : "아들의 부탁을 들어줬습니다! ❤️", 'success');
-        closeQuestModal();
-        gameState.son.quest = null;
-        updateUI();
-    } else {
-        showToast("아직 조건을 만족하지 못했습니다! 준비할 시간을 벌어보세요.", 'warning');
-    }
-}
-
-function rejectQuest() {
-    const q = gameState.son.quest;
-    const ctx = q?.context || 'home';
-    if (ctx === 'adventure') {
-        addMail("📵 연락 종료", "모험 중 도움을 못 받았다고 아들이 투덜댑니다.");
-        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 6);
-        gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2);
-        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
-        showToast("모험 중 연락을 거절했습니다.", 'warning');
-    } else {
-        sonSpeech("엄마 미워!!");
-        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 10);
-        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
-        showToast("아들이 실망했습니다... ⚡반항심 +10", 'warning');
-    }
-    closeQuestModal();
-    gameState.son.quest = null;
-    updateUI();
-}
-window.rejectQuest = rejectQuest;
+// (Legacy quest system removed: replaced by accumulated requests.)
 
 // ============================================================
 // Requests system (accumulates + deadline-based completion)
@@ -5631,7 +5448,7 @@ const requestTemplates = [
         title: '📚 책이 필요해요',
         desc: '엄마, 책 좀… 읽고 싶어요.',
         help: '해결: 집(서재)에서 책장에 책을 배치해두기',
-        durationMs: 60 * 60 * 1000, // 1h
+        durationMs: 25 * 60 * 1000, // 25m
         passive: true
     },
     {
@@ -5639,7 +5456,7 @@ const requestTemplates = [
         title: '🥩 스테이크 해주세요',
         desc: '엄마! 오늘은 스테이크 먹고 싶어요!',
         help: '해결: 주방에서 스테이크를 조리하면 식탁에 자동으로 올라가요',
-        durationMs: 60 * 1000, // 1m
+        durationMs: 6 * 60 * 1000, // 6m
         passive: true
     },
     {
@@ -5647,7 +5464,7 @@ const requestTemplates = [
         title: '🗡️ 더 좋은 무기 없어요?',
         desc: '엄마, 더 좋은 무기 없어요?',
         help: '해결: 옷장에서 더 좋은 무기를 장착해두기 (또는 자동 장착 버튼)',
-        durationMs: 4 * 60 * 1000,
+        durationMs: 10 * 60 * 1000, // 10m
         passive: true
     },
     {
@@ -5655,7 +5472,7 @@ const requestTemplates = [
         title: '🪙 용돈 주세요',
         desc: '엄마, 용돈 조금만…',
         help: '해결: 요청 목록에서 골드를 지급하기',
-        durationMs: 6 * 60 * 1000,
+        durationMs: 12 * 60 * 1000, // 12m
         passive: false
     },
     {
@@ -5663,7 +5480,7 @@ const requestTemplates = [
         title: '🤗 나 좀 봐주세요',
         desc: '엄마, 나 좀 봐주세요!',
         help: '해결: 요청 목록에서 “안아주기” 버튼 누르기',
-        durationMs: 90 * 1000,
+        durationMs: 4 * 60 * 1000, // 4m
         passive: false
     }
 ];
@@ -5783,7 +5600,6 @@ function addRequestFromTemplate(kind) {
     if (gameState.son.requests.length > 10) gameState.son.requests = gameState.son.requests.slice(0, 10);
 
     sonSpeech("엄마!! 부탁이 있어요!");
-    addMail("📋 아들의 요청", `${req.title}\n"${req.desc}"\n\n${req.help}`);
     showToast("📋 아들의 요청이 추가되었습니다.", 'info');
     updateUI();
     return req;
@@ -5809,7 +5625,6 @@ function isRequestConditionMet(req) {
 }
 
 function applyRequestSuccess(req, meta = {}) {
-    const auto = !!meta.auto;
     const affection = req.kind === 'need_hug' ? 6 : 8;
     const trust = req.kind === 'need_money' ? 4 : 3;
     const rebellionDown = req.kind === 'need_hug' ? 6 : 4;
@@ -5820,16 +5635,15 @@ function applyRequestSuccess(req, meta = {}) {
     if (req.kind === 'need_book' || req.kind === 'need_steak') {
         gameState.son.personality.flexibility = clampInt((gameState.son.personality.flexibility ?? 50) + 1, 0, 100);
     }
-    addMail("✅ 요청 완료", `${req.title}\n${auto ? '(자동 완료)' : ''}\n아들이 기뻐합니다.`);
     showToast("✅ 요청을 해결했습니다!", 'success');
 }
 
 function applyRequestFail(req) {
-    gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) + 10, 0, 100);
-    gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) - 4, 0, 100);
-    gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) - 2, 0, 100);
+    // Fail penalties should be noticeable but not run-killing (10-min demo friendly).
+    gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) + 6, 0, 100);
+    gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) - 2, 0, 100);
+    gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) - 1, 0, 100);
     gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
-    addMail("⏰ 요청 실패", `${req.title}\n기한 내 해결하지 못했습니다. (⚡반항 상승)`);
     showToast("⏰ 요청을 놓쳤습니다...", 'warning');
 }
 
@@ -5915,6 +5729,64 @@ function renderRequestsUI() {
     const now = Date.now();
     open.sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
 
+    const getProgressHtml = (req) => {
+        if (!req) return '';
+        if (req.kind === 'need_better_weapon') {
+            const baseAtk = Math.max(0, Math.floor(req.data?.baselineAtk || 0));
+            const baseName = String(req.data?.baselineName || '무기');
+            const curAtk = gameState.son.equipment?.weapon?.atk || 0;
+            const curName = gameState.son.equipment?.weapon?.name || '무기';
+            const bestOwned = getBestOwnedWeaponAtk();
+            const ok = curAtk > baseAtk;
+            return `
+                <div class="request-progress">
+                    <div>조건: <b>공격력 ${baseAtk + 1}+</b> 무기 장착</div>
+                    <div>현재: ${escapeHtml(curName)} (공+${curAtk}) · 기준: ${escapeHtml(baseName)} (공+${baseAtk})</div>
+                    <div>보유 최고: 공+${bestOwned} ${bestOwned > baseAtk ? '<span class="req-ok">가능</span>' : '<span class="req-warn">부족</span>'} ${ok ? '<span class="req-ok">완료됨</span>' : ''}</div>
+                </div>
+            `;
+        }
+        if (req.kind === 'need_book') {
+            ensureLibraryState();
+            const baseRev = Math.max(0, Math.floor(req.data?.baselineShelfPlaceRevision || 0));
+            const curRev = gameState.parent.library?.shelfPlaceRevision || 0;
+            const cnt = countShelfBooks();
+            const ok = (curRev > baseRev) && (cnt > 0);
+            const diff = Math.max(0, curRev - baseRev);
+            return `
+                <div class="request-progress">
+                    <div>조건: 책장에 <b>새 책 추가/교체</b> (교체도 OK)</div>
+                    <div>현재 책장: ${cnt}권 · 변경: +${diff} ${ok ? '<span class="req-ok">완료됨</span>' : ''}</div>
+                </div>
+            `;
+        }
+        if (req.kind === 'need_steak') {
+            const placed = gameState.rooms?.['room-table']?.placedItem || null;
+            const ok = placed === 'steak';
+            const label = placed ? (itemDB?.[placed]?.name || placed) : '비어있음';
+            return `
+                <div class="request-progress">
+                    <div>조건: 식탁에 <b>스테이크</b> 올려두기</div>
+                    <div>식탁 상태: ${escapeHtml(label)} ${ok ? '<span class="req-ok">완료됨</span>' : ''}</div>
+                </div>
+            `;
+        }
+        if (req.kind === 'need_money') {
+            const amt = Math.max(0, Math.floor(req.data?.amount || 0));
+            const have = Math.max(0, Math.floor(gameState.parent.gold || 0));
+            return `
+                <div class="request-progress">
+                    <div>조건: ${amt}G 지급</div>
+                    <div>보유: ${have}G ${have >= amt ? '<span class="req-ok">가능</span>' : '<span class="req-warn">부족</span>'}</div>
+                </div>
+            `;
+        }
+        if (req.kind === 'need_hug') {
+            return `<div class="request-progress"><div>조건: “안아주기” 버튼 누르기</div></div>`;
+        }
+        return '';
+    };
+
     els.requestList.innerHTML = open.map(req => {
         const remaining = Math.max(0, (req.dueAt || 0) - now);
         const remText = formatRemainingMs(remaining);
@@ -5923,9 +5795,10 @@ function renderRequestsUI() {
 
         let actionHtml = '';
         if (req.kind === 'need_money') {
-            const amt = req.data?.amount || 0;
+            const amt = Math.max(0, Math.floor(req.data?.amount || 0));
             actionHtml = `
-              <button class="mini-btn" type="button" ${canPay ? '' : 'disabled'} onclick="fulfillRequestNow('${req.id}')">지급 (${amt}G)</button>
+              <button class="mini-btn" type="button" ${canPay ? '' : 'disabled'} onclick="fulfillRequestNow('${req.id}')">${amt}G 주기</button>
+              <button class="mini-btn secondary" type="button" onclick="setMainView('town'); openTownSection('life');">부업</button>
             `;
         } else if (req.kind === 'need_hug') {
             actionHtml = `<button class="mini-btn" type="button" onclick="fulfillRequestNow('${req.id}')">🤗 안아주기</button>`;
@@ -5935,12 +5808,19 @@ function renderRequestsUI() {
               <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-wardrobe')">옷장</button>
             `;
         } else if (req.kind === 'need_book') {
+            ensureLibraryState();
+            const lib = gameState.parent.library;
+            const hasUnplacedOwned = bookCatalog.some(b => lib.owned?.[b.id] && !lib.read?.[b.id] && !(lib.shelf || []).includes(b.id));
+            const canBuy = bookCatalog.some(b => !lib.owned?.[b.id] && isBookUnlocked(b));
             actionHtml = `
-              <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-desk'); openBookshelfManager();">책장</button>
+              <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-desk'); openBookshelfManager();">${hasUnplacedOwned ? '책장(배치)' : '책장'}</button>
+              ${canBuy ? `<button class="mini-btn secondary" type="button" onclick="setMainView('town'); openTownSection('shop'); setShopTab('book');">서점</button>` : ''}
             `;
         } else if (req.kind === 'need_steak') {
+            const cost = getIngredientCostToCookRecipe('steak');
             actionHtml = `
               <button class="mini-btn secondary" type="button" onclick="setMainView('home'); setHomeRoomView('room-table'); openKitchenCookMenu();">주방</button>
+              ${Number.isFinite(cost) && cost !== Infinity ? `<button class="mini-btn secondary" type="button" onclick="setMainView('town'); openTownSection('shop'); setShopTab('grocery');">재료(약 ${cost}G)</button>` : ''}
             `;
         } else {
             actionHtml = `<button class="mini-btn secondary" type="button" onclick="setMainView('son'); setSonTab('summary')">확인</button>`;
@@ -5952,6 +5832,7 @@ function renderRequestsUI() {
               <div class="support-title">${req.title} <span style="font-size:0.75rem; color:${urgent ? '#ef4444' : '#64748b'}; font-weight:1000;">⏰ ${remText}</span></div>
               <div class="support-sub">"${req.desc}"</div>
               <div class="support-sub" style="margin-top:8px;"><b>해결 방법</b><br>${req.help}</div>
+              ${getProgressHtml(req)}
             </div>
             <div class="support-actions">${actionHtml}</div>
           </div>

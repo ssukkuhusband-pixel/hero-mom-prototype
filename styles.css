@@ -389,6 +389,43 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
 .support-row + .support-row { margin-top: 8px; }
 .support-title { font-weight: 1000; color:#0f172a; font-size:0.82rem; }
 .support-sub { margin-top:6px; font-size:0.75rem; color:#64748b; line-height:1.35; }
+.request-progress {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px dashed #e2e8f0;
+    background: #f8fafc;
+    font-size: 0.74rem;
+    color: #334155;
+    line-height: 1.35;
+}
+.request-progress b { color:#0f172a; }
+.req-ok {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    margin-left:6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 1000;
+    background: rgba(16, 185, 129, 0.12);
+    color: #065f46;
+    border: 1px solid rgba(16, 185, 129, 0.22);
+}
+.req-warn {
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    margin-left:6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 1000;
+    background: rgba(239, 68, 68, 0.10);
+    color: #991b1b;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+}
 .support-actions { display:flex; flex-direction:column; gap:6px; flex:0 0 auto; }
 .mini-btn {
     border: 1px solid #e2e8f0;
