@@ -323,15 +323,23 @@
 			                                    <div style="font-size:0.78rem; color:#64748b; font-weight:900;">🗺️ 장기 목표</div>
 			                                    <div id="long-goals-meta" style="font-size:0.78rem; color:#0f172a; font-weight:1000;">-</div>
 			                                </div>
-			                                <div id="long-goals" style="margin-top:8px;"></div>
-			                                <div id="last-choice" style="margin-top:10px; font-size:0.78rem; color:#64748b;"></div>
+				                                <div id="long-goals" style="margin-top:8px;"></div>
+				                                <div id="last-choice" style="margin-top:10px; font-size:0.78rem; color:#64748b;"></div>
+				                            </div>
+				                        </div>
+			                        <div class="hint-card" style="margin-top:10px;">
+			                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+			                                <b>💬 부탁</b>
+			                                <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="openMaterialRequestModal()">아들에게 부탁</button>
 			                            </div>
+			                            <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">친밀도가 높을수록, 부탁한 재료를 챙겨올 확률이 조금 올라갑니다.</div>
+			                            <div id="material-request-ui" style="margin-top:10px;"></div>
 			                        </div>
-		                        <div class="hint-card" style="margin-top:10px;">
-		                            <b>아들 현재 상태</b>
-		                            <div id="son-adventure-info" style="margin-top:8px; font-size:0.85rem; color:#0f172a; font-weight:900;">-</div>
-		                            <div id="son-adventure-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
-		                        </div>
+			                        <div class="hint-card" style="margin-top:10px;">
+			                            <b>아들 현재 상태</b>
+			                            <div id="son-adventure-info" style="margin-top:8px; font-size:0.85rem; color:#0f172a; font-weight:900;">-</div>
+			                            <div id="son-adventure-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
+			                        </div>
 		                        </div>
 
 		                        <div class="son-tab" id="son-tab-gear">
@@ -628,24 +636,39 @@
             </div>
 	        </div>
 
-	        <!-- Mailbox Modal -->
-	        <div class="modal-overlay" id="mailbox-modal">
-	            <div class="modal-content furn-modal-content">
-	                <div class="furn-modal-head">
-	                    <div>
-	                        <h3 style="margin-bottom:2px;">📮 우편함</h3>
-	                        <div style="font-size:0.8rem; color:#64748b;">최근 10개만 보관됩니다.</div>
-	                    </div>
-	                    <button class="wardrobe-close" type="button" onclick="closeMailbox()">닫기</button>
-	                </div>
-	                <ul class="mail-list" id="mailbox-list" style="list-style:none; margin-top:12px;"></ul>
-	            </div>
-	        </div>
+		        <!-- Mailbox Modal -->
+		        <div class="modal-overlay" id="mailbox-modal">
+		            <div class="modal-content furn-modal-content">
+		                <div class="furn-modal-head">
+		                    <div>
+		                        <h3 style="margin-bottom:2px;">📮 우편함</h3>
+		                        <div style="font-size:0.8rem; color:#64748b;">최근 10개만 보관됩니다.</div>
+		                    </div>
+		                    <button class="wardrobe-close" type="button" onclick="closeMailbox()">닫기</button>
+		                </div>
+		                <ul class="mail-list" id="mailbox-list" style="list-style:none; margin-top:12px;"></ul>
+		            </div>
+		        </div>
 
-	        <!-- Requests Modal -->
-	        <div class="modal-overlay" id="quest-modal">
-	            <div class="modal-content">
-                    <div class="furn-modal-head" style="margin-bottom:10px;">
+		        <!-- Material Request Modal -->
+		        <div class="modal-overlay" id="matreq-modal">
+		            <div class="modal-content furn-modal-content">
+		                <div class="furn-modal-head">
+		                    <div>
+		                        <h3 style="margin-bottom:2px;">💬 아들에게 부탁</h3>
+		                        <div style="font-size:0.8rem; color:#64748b;">“발견하면 가져다줘~” 부탁을 남길 수 있어요.</div>
+		                    </div>
+		                    <button class="wardrobe-close" type="button" onclick="closeMaterialRequestModal()">닫기</button>
+		                </div>
+		                <div id="matreq-current" style="margin-top:12px;"></div>
+		                <div id="matreq-list" style="margin-top:12px;"></div>
+		            </div>
+		        </div>
+
+		        <!-- Requests Modal -->
+		        <div class="modal-overlay" id="quest-modal">
+		            <div class="modal-content">
+	                    <div class="furn-modal-head" style="margin-bottom:10px;">
                         <div>
                             <h3 style="margin-bottom:2px;">📋 아들의 요청</h3>
                             <div style="font-size:0.8rem; color:#64748b;">요청은 목록에 쌓이고, <b>기한 내</b> 해결하면 좋아해요.</div>

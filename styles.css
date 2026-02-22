@@ -955,6 +955,14 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
     margin-bottom: 0;
 }
 
+/* Material request modal scrolling */
+#matreq-modal #matreq-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
 @keyframes toastIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }

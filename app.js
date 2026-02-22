@@ -220,6 +220,7 @@ function loadGame() {
         ensureBossSealState();
         ensureSonUiState();
         ensureSupportPinState();
+        ensureMaterialRequestState();
         cleanupLegacyParentSettings();
         ensureRequestState();
         ensureObjectiveState();
@@ -485,6 +486,23 @@ function ensureSupportPinState() {
     const p = gameState.parent.supportPin;
     if (!p) return;
     if (typeof p !== 'object' || !p.type) gameState.parent.supportPin = null;
+}
+
+function ensureMaterialRequestState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!('materialRequest' in gameState.parent)) gameState.parent.materialRequest = null;
+    if (!Number.isFinite(gameState.parent.materialRequestTarget)) gameState.parent.materialRequestTarget = 5;
+    gameState.parent.materialRequestTarget = clampInt(gameState.parent.materialRequestTarget, 1, 30);
+
+    const r = gameState.parent.materialRequest;
+    if (!r) return;
+    if (typeof r !== 'object' || !r.key) {
+        gameState.parent.materialRequest = null;
+        return;
+    }
+    r.key = String(r.key);
+    r.target = clampInt(r.target || 5, 1, 30);
+    if (!Number.isFinite(r.createdTick)) r.createdTick = Math.floor(gameState.worldTick || 0);
 }
 
 function ensureBossSealState() {
@@ -1376,7 +1394,11 @@ const els = {
     travelImg: document.getElementById('travel-img'),
     travelDialogue: document.getElementById('travel-dialogue'),
     travelSummary: document.getElementById('travel-summary'),
-    travelActions: document.getElementById('travel-actions')
+    travelActions: document.getElementById('travel-actions'),
+    matReqUi: document.getElementById('material-request-ui'),
+    matReqModal: document.getElementById('matreq-modal'),
+    matReqList: document.getElementById('matreq-list'),
+    matReqCurrent: document.getElementById('matreq-current')
 };
 
 const weaponsList = [
@@ -5558,13 +5580,14 @@ function updateUI() {
             }
         }
 
-        // Refresh sub-UIs
-        if (typeof updateSynthesisUI !== 'undefined') updateSynthesisUI();
-        updateUpgradeButtons(getActiveRoom());
-        updateFarmUI();
-        updateCookUI();
-        updateCraftUI();
-        renderFurnitureShop();
+	        // Refresh sub-UIs
+	        if (typeof updateSynthesisUI !== 'undefined') updateSynthesisUI();
+	        renderMaterialRequestUI();
+	        updateUpgradeButtons(getActiveRoom());
+	        updateFarmUI();
+	        updateCookUI();
+	        updateCraftUI();
+	        renderFurnitureShop();
         updateFurnitureShopUI();
     } catch (e) {
         console.error("CRASH IN updateUI:", e);
@@ -5655,6 +5678,243 @@ function renderMailbox() {
     }).join('');
 }
 
+// ============================================================
+// Material request (parent asks the son to bring a specific crafting material)
+// ============================================================
+function getMaterialRequestOptions() {
+    // Focus on crafting-related materials (not seeds). Boss trophies are excluded for now.
+    const keys = [
+        'herb',
+        'monster_bone',
+        'magic_crystal',
+        'rare_hide',
+        'leather',
+        'steel',
+        'wolf_fang',
+        'relic_fragment',
+        'wyvern_scale',
+        'dragon_heart'
+    ];
+    // Ensure display names exist.
+    keys.forEach(k => ensureLootKey(k));
+    return keys;
+}
+
+function getFindableZonesForMaterial(key) {
+    const k = String(key || '');
+    if (!k) return [];
+    const inCore = lootTable.some(it => it?.key === k);
+    if (inCore) return ['any'];
+    return zones
+        .filter(z => Array.isArray(z?.drops) && z.drops.some(d => d?.key === k))
+        .map(z => z.id);
+}
+
+function formatFindableZonesText(key) {
+    const zs = getFindableZonesForMaterial(key);
+    if (!zs.length) return '어디서 나오는지 아직 몰라요.';
+    if (zs.includes('any')) return '어느 던전에서든 나올 수 있어요.';
+    const names = zs.map(id => {
+        const z = getZoneById(id);
+        return `${z.emoji} ${z.name}`;
+    });
+    return `나오는 곳: ${names.join(', ')}`;
+}
+
+function canFindMaterialInZone(zone, key) {
+    const k = String(key || '');
+    if (!k) return false;
+    const core = lootTable.find(it => it?.key === k);
+    if (core) return (gameState.son.level || 1) >= (core.minLv || 1);
+    return !!(zone?.drops || []).some(d => d?.key === k);
+}
+
+function tryGrantRequestedMaterialBonus(zone, mission, diffKey, outcome) {
+    ensureMaterialRequestState();
+    const r = gameState.parent.materialRequest;
+    if (!r) return null;
+    const need = clampInt(r.target || 5, 1, 30);
+    if (materialHave(r.key) >= need) return null;
+    if (!canFindMaterialInZone(zone, r.key)) return null;
+
+    const a = gameState.son.affinity || {};
+    const p = gameState.son.personality || {};
+    const affection = clampInt(a.affection ?? 50, 0, 100);
+    const trust = clampInt(a.trust ?? 50, 0, 100);
+    const rebellion = clampInt(a.rebellion ?? 0, 0, 100);
+    const diligence = clampInt(p.diligence ?? 50, 0, 100);
+
+    let chance = 0.18;
+    chance += (affection - 50) / 100 * 0.20;
+    chance += (trust - 50) / 100 * 0.18;
+    chance += (diligence - 50) / 100 * 0.12;
+    chance -= (rebellion / 100) * 0.18;
+    if (mission?.id === 'gather') chance += 0.12;
+    if (mission?.id === 'boss') chance += 0.05;
+    if (diffKey === 'safe') chance += 0.05;
+    if (diffKey === 'risky') chance -= 0.03;
+    if (outcome === 'fail') chance -= 0.08;
+    if (outcome === 'great') chance += 0.05;
+    chance = clamp01(chance);
+    if (Math.random() > chance) return null;
+
+    let amount = 1;
+    if ((outcome === 'great' && Math.random() < 0.55) || (outcome === 'success' && Math.random() < 0.30)) amount += 1;
+    amount = Math.max(1, Math.min(2, amount));
+
+    ensureLootKey(r.key);
+    gameState.parent.loot[r.key].count += amount;
+    const text = `🧡 부탁: ${gameState.parent.loot[r.key].name} x${amount}`;
+    if (materialHave(r.key) >= need) showToast("💬 부탁한 재료가 목표 수량에 도달했어요!", 'success');
+    return { key: r.key, amount, text };
+}
+
+function getMaterialRequestChanceEstimate() {
+    const a = gameState.son.affinity || {};
+    const p = gameState.son.personality || {};
+    const affection = clampInt(a.affection ?? 50, 0, 100);
+    const trust = clampInt(a.trust ?? 50, 0, 100);
+    const rebellion = clampInt(a.rebellion ?? 0, 0, 100);
+    const diligence = clampInt(p.diligence ?? 50, 0, 100);
+    let chance = 0.18;
+    chance += (affection - 50) / 100 * 0.20;
+    chance += (trust - 50) / 100 * 0.18;
+    chance += (diligence - 50) / 100 * 0.12;
+    chance -= (rebellion / 100) * 0.18;
+    return clamp01(chance);
+}
+
+function getMaterialRequestStatus() {
+    ensureMaterialRequestState();
+    const r = gameState.parent.materialRequest;
+    if (!r) return { active: false };
+    const have = materialHave(r.key);
+    const need = clampInt(r.target || 5, 1, 30);
+    const done = have >= need;
+    return { active: true, key: r.key, have, need, done };
+}
+
+function renderMaterialRequestUI() {
+    if (!els.matReqUi) return;
+    ensureMaterialRequestState();
+    const st = getMaterialRequestStatus();
+    if (!st.active) {
+        els.matReqUi.innerHTML = `<div style="font-size:0.8rem; color:#64748b;">아직 부탁한 재료가 없어요. 제작에 막히는 재료를 부탁해보세요.</div>`;
+        return;
+    }
+    ensureLootKey(st.key);
+    const nm = gameState.parent.loot[st.key]?.name || st.key;
+    const progress = `${st.have}/${st.need}`;
+    const chance = Math.round(getMaterialRequestChanceEstimate() * 100);
+    const zoneText = formatFindableZonesText(st.key);
+    els.matReqUi.innerHTML = `
+      <div class="support-row ${st.done ? 'done' : ''}" style="align-items:flex-start;">
+        <div style="flex:1; min-width:0;">
+          <div class="support-title">${st.done ? '✅ ' : ''}${nm} 부탁</div>
+          <div class="support-sub">진행: <b>${progress}</b> · 친밀도 보정 기대: <b>약 ${chance}%</b><br><span style="color:#64748b;">${zoneText}</span></div>
+        </div>
+        <div class="support-actions">
+          <button class="mini-btn secondary" type="button" onclick="openMaterialRequestModal()">변경</button>
+          <button class="mini-btn" type="button" onclick="clearMaterialRequest()">해제</button>
+        </div>
+      </div>
+    `;
+}
+
+function adjustMaterialRequestTarget(delta) {
+    ensureMaterialRequestState();
+    gameState.parent.materialRequestTarget = clampInt((gameState.parent.materialRequestTarget || 5) + Math.floor(delta || 0), 1, 30);
+    if (els.matReqModal && els.matReqModal.style.display === 'flex') renderMaterialRequestModal();
+    updateUI();
+}
+window.adjustMaterialRequestTarget = adjustMaterialRequestTarget;
+
+function setMaterialRequest(key) {
+    ensureMaterialRequestState();
+    const k = String(key || '');
+    if (!k) return;
+    ensureLootKey(k);
+    gameState.parent.materialRequest = {
+        key: k,
+        target: clampInt(gameState.parent.materialRequestTarget || 5, 1, 30),
+        createdTick: Math.floor(gameState.worldTick || 0)
+    };
+    showToast(`💬 부탁 완료: ${gameState.parent.loot[k].name} (목표 ${gameState.parent.materialRequest.target}개)`, 'info');
+    renderMaterialRequestUI();
+    updateUI();
+}
+window.setMaterialRequest = setMaterialRequest;
+
+function clearMaterialRequest() {
+    ensureMaterialRequestState();
+    gameState.parent.materialRequest = null;
+    showToast("💬 부탁을 해제했어요.", 'info');
+    renderMaterialRequestUI();
+    updateUI();
+}
+window.clearMaterialRequest = clearMaterialRequest;
+
+function renderMaterialRequestModal() {
+    if (!els.matReqModal || !els.matReqList || !els.matReqCurrent) return;
+    ensureMaterialRequestState();
+    const st = getMaterialRequestStatus();
+    const tgt = clampInt(gameState.parent.materialRequestTarget || 5, 1, 30);
+
+    const curLine = st.active
+        ? (() => {
+            ensureLootKey(st.key);
+            const nm = gameState.parent.loot[st.key]?.name || st.key;
+            const done = st.done ? '✅' : '☐';
+            return `<div class="hint-card" style="margin-top:0;"><b>${done} 현재 부탁</b><div style="margin-top:6px; font-size:0.82rem; color:#0f172a; font-weight:1000;">${nm} (${st.have}/${st.need})</div><div style="margin-top:6px; font-size:0.78rem; color:#64748b;">${formatFindableZonesText(st.key)}</div></div>`;
+        })()
+        : `<div class="hint-card" style="margin-top:0;"><b>현재 부탁</b><div style="margin-top:6px; font-size:0.78rem; color:#64748b;">아직 부탁이 없어요.</div></div>`;
+
+    els.matReqCurrent.innerHTML = `
+      ${curLine}
+      <div class="hint-card" style="margin-top:10px;">
+        <b>목표 수량</b>
+        <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <button class="mini-btn secondary" type="button" onclick="adjustMaterialRequestTarget(-1)">-1</button>
+          <div style="font-weight:1000; color:#0f172a;">${tgt}개</div>
+          <button class="mini-btn secondary" type="button" onclick="adjustMaterialRequestTarget(1)">+1</button>
+        </div>
+        <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">목표 수량은 “지금 보유량” 기준으로 달성됩니다.</div>
+      </div>
+    `;
+
+    const options = getMaterialRequestOptions();
+    els.matReqList.innerHTML = options.map(k => {
+        ensureLootKey(k);
+        const nm = gameState.parent.loot[k].name;
+        const have = materialHave(k);
+        const zoneText = formatFindableZonesText(k);
+        return `
+          <div class="furn-row" style="align-items:flex-start;">
+            <div style="min-width:0;">
+              <div class="furn-row-title">${nm}</div>
+              <div class="furn-row-desc">보유: <b>${have}</b> · ${zoneText}</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+              <button class="mini-btn" type="button" onclick="setMaterialRequest('${k}')">부탁</button>
+            </div>
+          </div>
+        `;
+    }).join('');
+}
+
+function openMaterialRequestModal() {
+    if (!els.matReqModal) return;
+    ensureMaterialRequestState();
+    els.matReqModal.style.display = 'flex';
+    renderMaterialRequestModal();
+}
+window.openMaterialRequestModal = openMaterialRequestModal;
+
+function closeMaterialRequestModal() {
+    if (els.matReqModal) els.matReqModal.style.display = 'none';
+}
+window.closeMaterialRequestModal = closeMaterialRequestModal;
+
 function openMailbox() {
     if (els.mailboxModal) els.mailboxModal.style.display = 'flex';
     clearMailUnread();
@@ -5673,11 +5933,17 @@ if (els.mailboxModal) {
         if (e.target === els.mailboxModal) closeMailbox();
     });
 }
+if (els.matReqModal) {
+    els.matReqModal.addEventListener('click', (e) => {
+        if (e.target === els.matReqModal) closeMaterialRequestModal();
+    });
+}
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (els.travelModal && els.travelModal.style.display === 'flex') closeTravelModal();
     if (els.debugModal && els.debugModal.style.display === 'flex') closeBalancePanel();
     if (els.mailboxModal && els.mailboxModal.style.display === 'flex') closeMailbox();
+    if (els.matReqModal && els.matReqModal.style.display === 'flex') closeMaterialRequestModal();
     if (els.questModal && els.questModal.style.display === 'flex') closeRequestsModal();
 });
 
@@ -6504,6 +6770,10 @@ function completeAdventure() {
             }
         }
     }
+
+    // Parent's request: the son may remember and bring a bit extra (based on affinity).
+    const reqBonus = tryGrantRequestedMaterialBonus(zone, mission, diffKey, outcome);
+    if (reqBonus) lootResults.push(reqBonus.text);
 
     // Boss trophy (unique material) — gives “big moment” progression.
     if (mission?.id === 'boss' && zone) {
