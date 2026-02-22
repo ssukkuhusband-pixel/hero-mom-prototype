@@ -70,6 +70,7 @@ const DEFAULT_GAME_STATE = {
         shop: { uiTab: 'grocery' },
         work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
         worldCodex: { zones: {} },
+        bossSeals: {}, // { [zoneId]: true }
         furniture: {
             equipped: { bed: 'bed_basic', table: 'table_basic', desk: 'desk_basic', dummy: 'dummy_basic' },
             owned: { bed_basic: true, table_basic: true, desk_basic: true, dummy_basic: true }
@@ -216,6 +217,7 @@ function loadGame() {
         ensureFarm();
         ensureWorkState();
         ensureWorldCodexState();
+        ensureBossSealState();
         ensureSonUiState();
         ensureSupportPinState();
         cleanupLegacyParentSettings();
@@ -483,6 +485,17 @@ function ensureSupportPinState() {
     const p = gameState.parent.supportPin;
     if (!p) return;
     if (typeof p !== 'object' || !p.type) gameState.parent.supportPin = null;
+}
+
+function ensureBossSealState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!gameState.parent.bossSeals || typeof gameState.parent.bossSeals !== 'object') {
+        gameState.parent.bossSeals = {};
+    }
+    // sanitize booleans
+    for (const [k, v] of Object.entries(gameState.parent.bossSeals)) {
+        gameState.parent.bossSeals[k] = !!v;
+    }
 }
 
 function ensureRequestState() {
@@ -1746,6 +1759,111 @@ const zoneBosses = {
     dragon_lair: { emoji: '🐉', name: '고룡 아우르네스' }
 };
 
+const bossTrophiesByZone = {
+    meadow: { key: 'boar_tusk', emoji: '🐗', name: '멧돼지 왕의 엄니' },
+    forest: { key: 'goblin_crown', emoji: '🧌', name: '고블린 대장 왕관' },
+    ruins: { key: 'guardian_core', emoji: '🗿', name: '수호자의 핵' },
+    mountain: { key: 'griffin_feather', emoji: '🦅', name: '그리핀 깃털' },
+    dragon_lair: { key: 'ancient_scale', emoji: '🐉', name: '고룡 비늘' }
+};
+
+const bossSealDefs = {
+    meadow: {
+        id: 'seal_meadow',
+        name: '🌼 초원의 인장',
+        desc: '집에 작은 평온이 찾아옵니다.',
+        needs: { boar_tusk: 1, herb: 4, leather: 2 },
+        effects: { fatigueAdd: 0.02, riskMul: 0.98 }
+    },
+    forest: {
+        id: 'seal_forest',
+        name: '🌲 숲의 인장',
+        desc: '전리품을 더 잘 챙기게 됩니다.',
+        needs: { goblin_crown: 1, wolf_fang: 2, leather: 3 },
+        effects: { lootMul: 1.04 }
+    },
+    ruins: {
+        id: 'seal_ruins',
+        name: '🏛️ 유적의 인장',
+        desc: '경험이 더 빨리 쌓입니다.',
+        needs: { guardian_core: 1, steel: 4, magic_crystal: 2 },
+        effects: { expMul: 1.04 }
+    },
+    mountain: {
+        id: 'seal_mountain',
+        name: '🏔️ 산맥의 인장',
+        desc: '부상 위험이 조금 줄어듭니다.',
+        needs: { griffin_feather: 1, rare_hide: 1, steel: 4 },
+        effects: { riskMul: 0.95 }
+    },
+    dragon_lair: {
+        id: 'seal_dragon',
+        name: '🐉 고룡의 인장',
+        desc: '모험의 모든 보상이 조금씩 좋아집니다.',
+        needs: { ancient_scale: 1, dragon_heart: 1, steel: 8, magic_crystal: 4 },
+        effects: { goldMul: 1.05, lootMul: 1.05, expMul: 1.05, riskMul: 0.96, fatigueAdd: 0.03 }
+    }
+};
+
+function isBossSealCrafted(zoneId) {
+    ensureBossSealState();
+    return !!gameState.parent.bossSeals?.[zoneId];
+}
+
+function getBossSealPerks() {
+    ensureBossSealState();
+    const perks = { goldMul: 1.0, expMul: 1.0, lootMul: 1.0, riskMul: 1.0, fatigueAdd: 0.0 };
+    for (const [zoneId, crafted] of Object.entries(gameState.parent.bossSeals || {})) {
+        if (!crafted) continue;
+        const def = bossSealDefs[zoneId];
+        if (!def || !def.effects) continue;
+        const e = def.effects;
+        if (Number.isFinite(e.goldMul)) perks.goldMul *= e.goldMul;
+        if (Number.isFinite(e.expMul)) perks.expMul *= e.expMul;
+        if (Number.isFinite(e.lootMul)) perks.lootMul *= e.lootMul;
+        if (Number.isFinite(e.riskMul)) perks.riskMul *= e.riskMul;
+        if (Number.isFinite(e.fatigueAdd)) perks.fatigueAdd += e.fatigueAdd;
+    }
+    return perks;
+}
+
+function describeBossSealsShort() {
+    ensureBossSealState();
+    const crafted = Object.entries(gameState.parent.bossSeals || {}).filter(([, v]) => !!v).map(([k]) => bossSealDefs[k]?.name).filter(Boolean);
+    if (crafted.length === 0) return '';
+    return crafted.slice(0, 2).join(', ') + (crafted.length > 2 ? ` 외 ${crafted.length - 2}개` : '');
+}
+
+function craftBossSeal(zoneId) {
+    ensureBossSealState();
+    const def = bossSealDefs[zoneId];
+    if (!def) return;
+    if (isBossSealCrafted(zoneId)) {
+        showToast("이미 제작한 인장입니다.", 'warning');
+        return;
+    }
+    if (!canCraftNeeds(def.needs)) {
+        showToast("재료가 부족합니다!", 'error');
+        return;
+    }
+    consumeNeeds(def.needs);
+    gameState.parent.bossSeals[zoneId] = true;
+    showToast(`${def.name} 제작 완료!`, 'gold');
+    updateUI();
+}
+window.craftBossSeal = craftBossSeal;
+
+function describeSealEffects(e) {
+    if (!e) return '';
+    const parts = [];
+    if (Number.isFinite(e.goldMul) && Math.abs(e.goldMul - 1) > 0.001) parts.push(`골드 x${e.goldMul.toFixed(2)}`);
+    if (Number.isFinite(e.expMul) && Math.abs(e.expMul - 1) > 0.001) parts.push(`EXP x${e.expMul.toFixed(2)}`);
+    if (Number.isFinite(e.lootMul) && Math.abs(e.lootMul - 1) > 0.001) parts.push(`전리품 x${e.lootMul.toFixed(2)}`);
+    if (Number.isFinite(e.riskMul) && Math.abs(e.riskMul - 1) > 0.001) parts.push(`부상위험 x${e.riskMul.toFixed(2)}`);
+    if (Number.isFinite(e.fatigueAdd) && Math.abs(e.fatigueAdd) > 0.0001) parts.push(`귀환 컨디션 +${Math.round(e.fatigueAdd * 100)}%p`);
+    return parts.join(' · ');
+}
+
 function ensureWorldCodexState() {
     if (!gameState.parent.worldCodex || typeof gameState.parent.worldCodex !== 'object') {
         gameState.parent.worldCodex = { zones: {} };
@@ -1876,10 +1994,19 @@ function renderWorldCodexUI(currentGoalZoneId) {
 function ensureLootKey(key) {
     if (!gameState.parent.loot[key]) {
         const nameMap = {
+            herb: '🌿 약초',
+            monster_bone: '🦴 몬스터 뼈',
+            magic_crystal: '💎 마법 결정',
+            rare_hide: '🧶 희귀 가죽',
             wolf_fang: '🐺 늑대 송곳니',
             relic_fragment: '🧩 유물 파편',
             wyvern_scale: '🪶 와이번 비늘',
             dragon_heart: '❤️‍🔥 드래곤의 심장',
+            boar_tusk: '🐗 멧돼지 왕의 엄니',
+            goblin_crown: '🧌 고블린 대장 왕관',
+            guardian_core: '🗿 수호자의 핵',
+            griffin_feather: '🦅 그리핀 깃털',
+            ancient_scale: '🐉 고룡 비늘',
             leather: '🧵 가죽',
             steel: '🪨 강철',
             iron_scrap: '🧩 철 조각',
@@ -3787,6 +3914,30 @@ function updateCraftUI() {
     }
     html += `</div>`;
 
+    // Boss seals (parent-side progression using boss trophies)
+    html += `<div class="craft-section"><div class="craft-title">🏆 보스 인장 <span class="craft-meta">영구 효과</span></div>`;
+    html += `<div style="font-size:0.78rem; color:#64748b; margin-bottom:8px;">보스 전리품으로 인장을 만들어, 이후 모험이 조금씩 좋아집니다.</div>`;
+    for (const z of zones) {
+        const def = bossSealDefs[z.id];
+        if (!def) continue;
+        const crafted = isBossSealCrafted(z.id);
+        const can = !crafted && canCraftNeeds(def.needs);
+        const effect = describeSealEffects(def.effects);
+        html += `
+          <div class="craft-item ${crafted || can ? '' : 'locked'}">
+            <div class="craft-row">
+              <div>
+                <div class="craft-name">${def.name}</div>
+                <div class="craft-meta">${z.emoji} ${z.name} · ${effect ? effect : '효과 없음'}</div>
+              </div>
+              <button class="craft-btn" ${crafted ? 'disabled' : (can ? '' : 'disabled')} onclick="craftBossSeal('${z.id}')">${crafted ? '완료' : '제작'}</button>
+            </div>
+            <div class="craft-needs">${needsText(def.needs)}${def.desc ? `<br><span style="color:#64748b;">${def.desc}</span>` : ''}</div>
+          </div>
+        `;
+    }
+    html += `</div>`;
+
     root.innerHTML = html;
 }
 
@@ -4816,6 +4967,7 @@ function updateUI() {
         ensureShopState();
         ensureLibraryState();
         ensureWorkState();
+        ensureBossSealState();
         ensureSupportPinState();
         ensureRequestState();
         applySmithyTabUI();
@@ -5767,6 +5919,7 @@ function completeAdventure() {
     const appliedBuff = normalizeNextAdventureBuff(gameState.son.adventure?.buff || legacyBuff);
     const job = gameState.son.adventure?.job || getAdventureJobPerks();
     const sendoff = gameState.son.adventure?.sendoff || null;
+    const seals = getBossSealPerks();
 
     const injuryRiskMul = gameState.son.injury?.riskMul ?? 1.0;
     const effectiveCp = cp;
@@ -5793,10 +5946,11 @@ function completeAdventure() {
     if (appliedBuff?.goldMul) finalGold = Math.floor(finalGold * appliedBuff.goldMul);
     if (job?.goldMul) finalGold = Math.floor(finalGold * job.goldMul);
     if (sendoff?.goldMul) finalGold = Math.floor(finalGold * sendoff.goldMul);
+    if (seals?.goldMul) finalGold = Math.floor(finalGold * seals.goldMul);
 
     const lootResults = [];
     const lootPasses = (rebellionMaverick ? 2 : 1) + (mission.id === 'gather' ? 1 : 0) + (outcome === 'great' ? 1 : 0);
-    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0);
+    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0) * (seals?.lootMul ?? 1.0);
     let zoneDropHits = 0;
     let nonSeedHits = 0;
 
@@ -5857,16 +6011,34 @@ function completeAdventure() {
         }
     }
 
+    // Boss trophy (unique material) — gives “big moment” progression.
+    if (mission?.id === 'boss' && zone) {
+        const trophy = bossTrophiesByZone[zone.id];
+        if (trophy) {
+            let grant = 0;
+            if (outcome === 'great' || outcome === 'success') grant = 1;
+            else if (outcome === 'partial' && Math.random() < 0.25) grant = 1; // partial reward
+            if (grant > 0) {
+                if (outcome === 'great' && Math.random() < 0.22) grant += 1;
+                ensureLootKey(trophy.key);
+                gameState.parent.loot[trophy.key].count += grant;
+                lootResults.push(`${gameState.parent.loot[trophy.key].name} x${grant}`);
+            }
+        }
+    }
+
     const baseExp = 18 + (gameState.son.level * 5);
     let adventureExp = Math.floor(baseExp * diff.expMul * mission.expMul * (outcome === 'great' ? 1.1 : outcome === 'partial' ? 0.75 : outcome === 'fail' ? 0.55 : 1.0));
     if (appliedBuff?.expMul) adventureExp = Math.floor(adventureExp * appliedBuff.expMul);
     if (job?.expMul) adventureExp = Math.floor(adventureExp * job.expMul);
+    if (seals?.expMul) adventureExp = Math.floor(adventureExp * seals.expMul);
     gameState.son.exp += adventureExp;
 
     const baseFatigueFloor = diff.fatigueFloor;
     let fatigueFloor = baseFatigueFloor;
     if (appliedBuff?.fatigueAdd) fatigueFloor = Math.min(0.55, fatigueFloor + appliedBuff.fatigueAdd);
     if (job?.fatigueAdd) fatigueFloor = Math.min(0.60, fatigueFloor + job.fatigueAdd);
+    if (seals?.fatigueAdd) fatigueFloor = Math.min(0.62, fatigueFloor + seals.fatigueAdd);
     gameState.son.hp = Math.max(15, Math.floor(gameState.son.maxHp * fatigueFloor));
     gameState.son.hunger = Math.max(15, Math.floor(gameState.son.maxHunger * fatigueFloor));
 
@@ -5895,7 +6067,8 @@ function completeAdventure() {
     const buffRiskMul = appliedBuff?.riskMul ?? 1.0;
     const jobRiskMul = job?.riskMul ?? 1.0;
     const sendoffRiskMul = sendoff?.riskMul ?? 1.0;
-    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul * sendoffRiskMul);
+    const sealRiskMul = seals?.riskMul ?? 1.0;
+    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul * sendoffRiskMul * sealRiskMul);
     if (Math.random() < finalRisk) {
         const severityRoll = Math.random();
         const deepFail = score < 0.7 ? 1 : 0;
@@ -5939,6 +6112,8 @@ function completeAdventure() {
         '';
     const buffLine = appliedBuff ? `✨ 버프: ${describeNextAdventureBuff(appliedBuff)}` : '';
     const jobLine = job ? `🧭 직업: ${job.name}${job.desc ? ` (${job.desc})` : ''}` : '';
+    const sealShort = describeBossSealsShort();
+    const sealLine = sealShort ? `🏆 인장: ${sealShort}` : '';
     const encourageLine = gameState.son.adventureEncouraged ? '💌 응원 보너스: 적용(+20%)' : '';
     const maverickLine = rebellionMaverick ? '🌟 고집이 발동해 예상 밖의 성과를 냈습니다.' : '';
 
@@ -5949,6 +6124,7 @@ function completeAdventure() {
         injuryLine,
         encourageLine,
         buffLine,
+        sealLine,
         jobLine,
         sendoffLine,
         maverickLine
