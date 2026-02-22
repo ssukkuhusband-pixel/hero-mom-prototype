@@ -20,6 +20,9 @@
 			                        <span>📮 우편함</span>
 			                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
 			                    </button>
+			                    <button class="mailbox-btn" type="button" onclick="openBalancePanel()" title="밸런스/디버그">
+			                        <span>📊 밸런스</span>
+			                    </button>
 			                    <button class="mailbox-btn reset-btn" type="button" onclick="resetGame()" title="데이터 초기화">
 			                        <span>🧹 초기화</span>
 			                    </button>
@@ -650,6 +653,21 @@
                         <button class="wardrobe-close" type="button" onclick="closeRequestsModal()">닫기</button>
                     </div>
                     <div id="request-list"></div>
+            </div>
+        </div>
+
+        <!-- Balance/Debug Modal -->
+        <div class="modal-overlay" id="debug-modal">
+            <div class="modal-content furn-modal-content">
+                <div class="furn-modal-head">
+                    <div>
+                        <h3 style="margin-bottom:2px;">📊 밸런스 패널</h3>
+                        <div style="font-size:0.8rem; color:#64748b;">현재 상태 기준으로 보상/제작 병목을 빠르게 점검합니다.</div>
+                    </div>
+                    <button class="wardrobe-close" type="button" onclick="closeBalancePanel()">닫기</button>
+                </div>
+                <div id="debug-content" style="margin-top:12px;"></div>
+                <button class="action-btn" style="background:#0f172a; margin-top:12px;" onclick="rerunBalanceSim()">🔁 다시 계산</button>
             </div>
         </div>
 

@@ -541,6 +541,7 @@ p { font-size: 0.95rem; color: #64748b; margin-bottom: 0.5rem; }
 #inv-modal { z-index: 120; }
 #furn-modal { z-index: 125; }
 #quest-modal { z-index: 130; }
+#debug-modal { z-index: 135; }
 #travel-modal { z-index: 140; }
 
 /* Travel modal (leave/return) */

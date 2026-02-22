@@ -1265,6 +1265,8 @@ const els = {
     questTimer: document.getElementById('quest-timer'),
     questModal: document.getElementById('quest-modal'),
     requestList: document.getElementById('request-list'),
+    debugModal: document.getElementById('debug-modal'),
+    debugContent: document.getElementById('debug-content'),
     sonStateLabel: document.getElementById('son-state-label'),
     // New elements
     adventureView: document.getElementById('adventure-view'),
@@ -5523,6 +5525,7 @@ if (els.mailboxModal) {
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (els.travelModal && els.travelModal.style.display === 'flex') closeTravelModal();
+    if (els.debugModal && els.debugModal.style.display === 'flex') closeBalancePanel();
     if (els.mailboxModal && els.mailboxModal.style.display === 'flex') closeMailbox();
     if (els.questModal && els.questModal.style.display === 'flex') closeRequestsModal();
 });
@@ -5605,6 +5608,219 @@ if (els.travelModal) {
     els.travelModal.addEventListener('click', (e) => {
         if (e.target === els.travelModal) closeTravelModal();
     });
+}
+
+// ============================================================
+// Balance panel (debug) — pauses game time
+// ============================================================
+function openBalancePanel() {
+    if (!els.debugModal || !els.debugContent) return;
+    pauseGame('debug-modal');
+    els.debugModal.style.display = 'flex';
+    renderBalancePanel();
+}
+window.openBalancePanel = openBalancePanel;
+
+function closeBalancePanel() {
+    if (els.debugModal) els.debugModal.style.display = 'none';
+    resumeGame();
+}
+window.closeBalancePanel = closeBalancePanel;
+
+function rerunBalanceSim() {
+    renderBalancePanel(true);
+}
+window.rerunBalanceSim = rerunBalanceSim;
+
+if (els.debugModal) {
+    els.debugModal.addEventListener('click', (e) => {
+        if (e.target === els.debugModal) closeBalancePanel();
+    });
+}
+
+function simulateAdventureBatch(plan, runs = 20) {
+    const n = Math.max(5, Math.min(200, Math.floor(runs || 20)));
+    const zone = plan.zone;
+    const mission = plan.mission;
+    const diff = plan.diff;
+    const cp = plan.cp;
+    const job = getAdventureJobPerks();
+    const seals = getBossSealPerks();
+
+    const missionGoldMul = Number.isFinite(mission.goldMul) ? mission.goldMul : (Number.isFinite(mission.rewardMul) ? mission.rewardMul : 1.0);
+    const missionLootMul = Number.isFinite(mission.lootMul) ? mission.lootMul : (Number.isFinite(mission.rewardMul) ? mission.rewardMul : 1.0);
+
+    const totals = {
+        gold: 0,
+        exp: 0,
+        outcomes: { great: 0, success: 0, partial: 0, fail: 0 },
+        loot: {} // key -> count
+    };
+
+    const addLoot = (key, amount) => {
+        const k = String(key || '');
+        totals.loot[k] = (totals.loot[k] || 0) + Math.max(0, Math.floor(amount || 0));
+    };
+
+    const baseScore = cp / Math.max(1, zone.recCP);
+    for (let i = 0; i < n; i++) {
+        // Small jitter makes outcomes feel less deterministic in the report.
+        const score = baseScore * (0.92 + Math.random() * 0.16);
+        let outcome = 'fail';
+        if (score >= 1.25) outcome = 'great';
+        else if (score >= 1.0) outcome = 'success';
+        else if (score >= 0.78) outcome = 'partial';
+        totals.outcomes[outcome] = (totals.outcomes[outcome] || 0) + 1;
+
+        const outcomeMul = outcome === 'great' ? 1.18 : outcome === 'success' ? 1.0 : outcome === 'partial' ? 0.65 : 0.35;
+
+        // Gold
+        const earnedGold = Math.floor((zone.baseGold + cp * 3.2 + Math.random() * 160) * diff.goldMul * missionGoldMul * outcomeMul);
+        const gold = Math.floor(earnedGold * (job.goldMul || 1.0) * (seals.goldMul || 1.0));
+        totals.gold += gold;
+
+        // EXP
+        const baseExp = 18 + (gameState.son.level * 5);
+        let exp = Math.floor(baseExp * diff.expMul * mission.expMul * (outcome === 'great' ? 1.1 : outcome === 'partial' ? 0.75 : outcome === 'fail' ? 0.55 : 1.0));
+        exp = Math.floor(exp * (job.expMul || 1.0) * (seals.expMul || 1.0));
+        totals.exp += exp;
+
+        // Loot
+        const lootResults = [];
+        const lootPasses = 1 + (mission.id === 'gather' ? 1 : 0) + (outcome === 'great' ? 1 : 0);
+        const lootBuffMul = (job.lootMul || 1.0) * (seals.lootMul || 1.0);
+        let zoneDropHits = 0;
+        let nonSeedHits = 0;
+
+        for (let pass = 0; pass < lootPasses; pass++) {
+            for (const item of lootTable) {
+                const passMul = pass === 0 ? 1.0 : pass === 1 ? 0.45 : 0.25;
+                const prob = Math.min(95, item.prob * diff.lootMul * lootBuffMul * missionLootMul * passMul * outcomeMul);
+                if (gameState.son.level >= item.minLv && Math.random() * 100 < prob) {
+                    const amount = 1 + Math.floor(Math.random() * 2);
+                    addLoot(item.key, amount);
+                    lootResults.push({ key: item.key, amount });
+                }
+            }
+        }
+
+        if (zone?.drops?.length) {
+            for (const drop of zone.drops) {
+                const prob = Math.min(95, drop.prob * diff.lootMul * lootBuffMul * missionLootMul * outcomeMul);
+                if (Math.random() * 100 < prob) {
+                    const amount = drop.min + Math.floor(Math.random() * (drop.max - drop.min + 1));
+                    addLoot(drop.key, amount);
+                    zoneDropHits++;
+                    if (drop.key !== 'seed') nonSeedHits++;
+                }
+            }
+        }
+
+        if (zone && (zoneDropHits === 0 || nonSeedHits === 0)) {
+            const g = grantGuaranteedZoneDrop({ zone, mission, outcome });
+            if (g) addLoot(g.key, g.amount);
+        }
+
+        if (mission?.id === 'boss' && zone) {
+            const trophy = bossTrophiesByZone[zone.id];
+            if (trophy) {
+                let grant = 0;
+                if (outcome === 'great' || outcome === 'success') grant = 1;
+                else if (outcome === 'partial' && Math.random() < 0.25) grant = 1;
+                if (grant > 0) addLoot(trophy.key, grant);
+            }
+        }
+    }
+
+    return {
+        runs: n,
+        avgGold: Math.round(totals.gold / n),
+        avgExp: Math.round(totals.exp / n),
+        outcomePct: Object.fromEntries(Object.entries(totals.outcomes).map(([k, v]) => [k, Math.round((v / n) * 100)])),
+        avgLoot: Object.fromEntries(Object.entries(totals.loot).map(([k, v]) => [k, +(v / n).toFixed(2)]))
+    };
+}
+
+function renderBalancePanel() {
+    if (!els.debugContent) return;
+    ensureBossSealState();
+    ensureObjectiveState();
+
+    const plan = planAdventureGoal();
+    const objective = plan.objective || gameState.son.objective;
+    const prog = objective ? getObjectiveProgress(objective) : null;
+    const job = getAdventureJobPerks();
+    const seals = getBossSealPerks();
+
+    const sim = simulateAdventureBatch(plan, 25);
+
+    const lootPairs = Object.entries(sim.avgLoot)
+        .filter(([k, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+    const lootLines = lootPairs.length
+        ? lootPairs.map(([k, v]) => {
+            const nm = k === 'seed' ? '🌱 씨앗' : (gameState.parent.loot?.[k]?.name || k);
+            return `${nm}: ${v}/회`;
+        }).join('<br>')
+        : '-';
+
+    const nextSteps = craftConfig.slots.map(slot => getNextGearCraftStep(slot)).filter(Boolean);
+    const stepHtml = nextSteps.map(s => {
+        const needs = s.recipe.needs || {};
+        const miss = Object.entries(needs).map(([k, v]) => {
+            const have = materialHave(k);
+            const lack = Math.max(0, v - have);
+            const nm = gameState.parent.loot?.[k]?.name || k;
+            return lack > 0 ? `<span style="color:#ef4444;">${nm} -${lack}</span>` : `<span style="color:#10b981;">${nm} OK</span>`;
+        }).join(' · ');
+        return `<div class="support-row"><div style="flex:1; min-width:0;"><div class="support-title">🧵 다음 ${slotName(s.slot)}: T${s.tier}</div><div class="support-sub">${miss || '-'}</div></div></div>`;
+    }).join('');
+
+    const sealShort = describeBossSealsShort();
+    const perkLine = [
+        seals.goldMul !== 1 ? `골드 x${seals.goldMul.toFixed(2)}` : '',
+        seals.lootMul !== 1 ? `전리품 x${seals.lootMul.toFixed(2)}` : '',
+        seals.expMul !== 1 ? `EXP x${seals.expMul.toFixed(2)}` : '',
+        seals.riskMul !== 1 ? `부상위험 x${seals.riskMul.toFixed(2)}` : '',
+        seals.fatigueAdd ? `귀환 +${Math.round(seals.fatigueAdd * 100)}%p` : ''
+    ].filter(Boolean).join(' · ') || '없음';
+
+    els.debugContent.innerHTML = `
+      <div class="hint-card">
+        <b>🎯 현재 목표/다음 모험</b>
+        <div style="margin-top:8px; font-size:0.88rem; font-weight:1000; color:#0f172a;">
+          ${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name} (${diffLabel(plan.diffKey)})
+        </div>
+        <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">
+          CP ${plan.cp} / 권장 ${plan.zone.recCP} · ${objective ? (prog?.label || '') : '목표 없음'}
+        </div>
+      </div>
+
+      <div class="hint-card" style="margin-top:10px;">
+        <b>🧭 직업/인장</b>
+        <div style="margin-top:8px; font-size:0.82rem; color:#0f172a; font-weight:1000;">직업: ${job.name}</div>
+        <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">${job.desc || ''}</div>
+        <div style="margin-top:10px; font-size:0.82rem; color:#0f172a; font-weight:1000;">인장: ${sealShort || '없음'}</div>
+        <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">효과: ${perkLine}</div>
+      </div>
+
+      <div class="hint-card" style="margin-top:10px;">
+        <b>🧪 25회 시뮬레이션(대략)</b>
+        <div style="margin-top:8px; font-size:0.82rem; color:#0f172a; font-weight:1000;">평균 골드: ${sim.avgGold}G · 평균 EXP: ${sim.avgExp}</div>
+        <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">성공 분포: 대성공 ${sim.outcomePct.great || 0}% · 성공 ${sim.outcomePct.success || 0}% · 부분 ${sim.outcomePct.partial || 0}% · 실패 ${sim.outcomePct.fail || 0}%</div>
+        <div style="margin-top:10px; font-size:0.78rem; color:#475569; line-height:1.4;"><b>전리품(상위 10)</b><br>${lootLines}</div>
+      </div>
+
+      <div class="hint-card" style="margin-top:10px;">
+        <b>🧵 제작 병목(다음 단계)</b>
+        <div style="margin-top:8px;">${stepHtml || '-'}</div>
+      </div>
+    `;
+}
+
+function diffLabel(diffKey) {
+    return (difficultyData[diffKey] || difficultyData.normal).name.replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '');
 }
 
 // ============================================================
