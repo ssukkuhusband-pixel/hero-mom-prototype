@@ -6318,6 +6318,8 @@ function maybeSendAdventureMail(ticks, totalTicks) {
     if (!gameState.son.adventure) return;
     const adv = gameState.son.adventure;
     if (adv.mailCount >= 2) return;
+    if (!adv.mailSent || typeof adv.mailSent !== 'object') adv.mailSent = { a: false, b: false, c: false };
+    if (!Number.isFinite(adv.mailCount)) adv.mailCount = 0;
     if (!adv.photosSent || typeof adv.photosSent !== 'object') adv.photosSent = {};
 
     const marks = [
@@ -6325,9 +6327,9 @@ function maybeSendAdventureMail(ticks, totalTicks) {
         { key: 'b', at: Math.floor(totalTicks * 0.5) },
         { key: 'c', at: Math.floor(totalTicks * 0.76) }
     ];
-    const mark = marks.find(m => m.at === ticks);
+    // Use >= to avoid missing a mark after refresh/resume.
+    const mark = marks.find(m => ticks >= m.at && !adv.mailSent[m.key]);
     if (!mark) return;
-    if (adv.mailSent[mark.key]) return;
     adv.mailSent[mark.key] = true;
 
     const trust = gameState.son.affinity.trust;
@@ -6337,7 +6339,7 @@ function maybeSendAdventureMail(ticks, totalTicks) {
     const diffKey = adv.difficulty || 'normal';
 
     // 성실/애정/신뢰가 높을수록 소식이 자주 옴. 대담할수록 “안 보내도 괜찮지” 성향.
-    let chance = 0.25;
+    let chance = 0.42;
     chance += (diligence - 50) / 100 * 0.25;
     chance += (affection - 50) / 100 * 0.18;
     chance += (trust - 50) / 100 * 0.12;
@@ -6345,12 +6347,18 @@ function maybeSendAdventureMail(ticks, totalTicks) {
     if (diffKey === 'safe') chance += 0.08;
     if (diffKey === 'risky') chance -= 0.04;
     chance = clamp01(chance);
+    // If the son didn't send any message until the last mark, force at least one letter.
+    if (mark.key === 'c' && adv.mailCount <= 0) chance = 1.0;
     if (Math.random() > chance) return;
 
     const zone = getZoneById(adv.zoneId);
     const mission = getMissionById(adv.missionId);
     // Sometimes attach an image for extra emotion.
-    if (Math.random() < 0.38) {
+    const photoSentCount = Object.keys(adv.photosSent || {}).length;
+    let photoChance = 0.38;
+    if (adv.mailCount === 0 && photoSentCount === 0) photoChance = 0.68; // first message: more likely to include a photo
+    if (mark.key === 'c' && photoSentCount === 0) photoChance = Math.max(photoChance, 0.55);
+    if (Math.random() < photoChance) {
         const p = pickPhotoMailForAdventure(adv);
         if (p) {
             adv.photosSent[p.id] = true;
