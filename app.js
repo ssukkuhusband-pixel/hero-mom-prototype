@@ -4565,27 +4565,59 @@ function craftGear(slot, recipeId) {
     if (!inv) return;
     const tier = parseInt((recipeId.split('_t')[1] || '').trim(), 10);
     const recipe = buildGearRecipe(slot, Number.isFinite(tier) ? tier : 1);
-    const hasPrev = !recipe.needsGear || ((inv[recipe.needsGear.id]?.count || 0) >= recipe.needsGear.count);
+    const prevNeed = recipe.needsGear;
+    const invPrevCount = prevNeed ? (inv[prevNeed.id]?.count || 0) : 0;
+    const equippedPrev = prevNeed ? (gameState.son.equipment?.[slot]?.id === prevNeed.id) : false;
+    const equippedPrevCount = equippedPrev ? 1 : 0;
+    const hasPrev = !prevNeed || ((invPrevCount + equippedPrevCount) >= prevNeed.count);
     if (!hasPrev) {
         showToast("이전 티어 장비가 필요합니다!", 'warning');
         return;
+    }
+    const useEquippedPrev = !!(prevNeed && equippedPrev && invPrevCount < (prevNeed.count || 1));
+    if (useEquippedPrev) {
+        const ok = window.confirm(`착용 중인 “${prevNeed.name}”을(를) 승급 재료로 사용합니다.\n→ 승급 후 새 장비를 자동으로 장착할까요?`);
+        if (!ok) return;
     }
     if (!canCraftNeeds(recipe.needs)) {
         showToast("재료가 부족합니다!", 'error');
         return;
     }
     // Consume previous tier gear for upgrades
-    if (recipe.needsGear) {
-        inv[recipe.needsGear.id].count -= recipe.needsGear.count;
+    if (prevNeed) {
+        const needCnt = Math.max(1, Math.floor(prevNeed.count || 1));
+        const takeFromInv = Math.min(invPrevCount, needCnt);
+        if (takeFromInv > 0) inv[prevNeed.id].count -= takeFromInv;
+        const remaining = needCnt - takeFromInv;
+        if (remaining > 0) {
+            // Consume from equipped gear (only supported when it matches)
+            if (equippedPrev) {
+                // Replace equipment later; nothing to return to inventory.
+            } else {
+                showToast("이전 티어 장비가 부족합니다!", 'warning');
+                return;
+            }
+        }
     }
     consumeNeeds(recipe.needs);
     if (!inv[recipe.id]) {
         inv[recipe.id] = { id: recipe.id, name: recipe.name, def: recipe.def, count: 0, cost: 0, tier: recipe.tier };
     }
-    inv[recipe.id].count++;
     const actionLabel = recipe.tier === 1 ? '제작' : '승급';
-    showToast(`${recipe.name} ${actionLabel} 완료!`, 'gold');
-    addMail("🧵 제작 완료", `${slotName(slot)}: <b>${recipe.name}</b> (방+${recipe.def})`);
+    if (useEquippedPrev) {
+        // Auto-replace equipped gear with the newly crafted one.
+        gameState.son.equipment[slot] = {
+            id: recipe.id,
+            name: recipe.name,
+            atk: 0,
+            def: recipe.def || 0,
+            tier: recipe.tier
+        };
+        showToast(`${recipe.name} ${actionLabel} 완료! (자동 장착)`, 'gold');
+    } else {
+        inv[recipe.id].count++;
+        showToast(`${recipe.name} ${actionLabel} 완료!`, 'gold');
+    }
     updateUI();
 }
 window.craftGear = craftGear;
@@ -4602,7 +4634,6 @@ function craftMilestoneWeapon(weaponId) {
     consumeNeeds(needs);
     w.count++;
     showToast(`${w.name} 제작 완료!`, 'gold');
-    addMail("🧵 제작 완료", `<b>${w.name}</b> (공+${w.atk})`);
     updateUI();
 }
 window.craftMilestoneWeapon = craftMilestoneWeapon;
@@ -4652,10 +4683,14 @@ function needsText(needs) {
 function gearNeedText(slot, needsGear) {
     if (!needsGear) return '';
     const inv = gameState.parent.gearInventory?.[slot] || {};
-    const have = inv[needsGear.id]?.count || 0;
+    const invHave = inv[needsGear.id]?.count || 0;
+    const equipped = gameState.son.equipment?.[slot];
+    const equippedHave = (equipped && equipped.id === needsGear.id) ? 1 : 0;
+    const have = invHave + equippedHave;
     const need = needsGear.count || 1;
     const color = have >= need ? '#10b981' : '#ef4444';
-    return `<span style="color:${color}; font-weight:900;">이전 장비 ${needsGear.name} ${have}/${need}</span>`;
+    const suffix = equippedHave ? ` <span style="color:#64748b; font-weight:900;">(착용중 포함)</span>` : '';
+    return `<span style="color:${color}; font-weight:900;">이전 장비 ${needsGear.name} ${have}/${need}${suffix}</span>`;
 }
 
 function getNeedDeficits(needs) {
