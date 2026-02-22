@@ -47,6 +47,17 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2600);
 }
 
+function pulseElement(el, className = 'ui-pulse') {
+    if (!el || !el.classList) return;
+    el.classList.remove(className);
+    // Force reflow to restart animation
+    void el.offsetWidth;
+    el.classList.add(className);
+    setTimeout(() => {
+        try { el.classList.remove(className); } catch { /* ignore */ }
+    }, 1000);
+}
+
 // --- Pause / Time Freeze (used by important popups) ---
 let isGamePaused = false;
 let pauseStartedAtMs = 0;
@@ -1868,6 +1879,7 @@ const els = {
     gachaResult: document.getElementById('gacha-result'),
     mailList: document.getElementById('mailbox-list'),
     mailboxModal: document.getElementById('mailbox-modal'),
+    btnMailbox: document.getElementById('btn-mailbox'),
     mailBadge: document.getElementById('mail-badge'),
     btnBgm: document.getElementById('btn-bgm'),
     bgm: document.getElementById('bgm'),
@@ -2981,7 +2993,7 @@ const chapterDefs = {
 function ensureChapterState() {
     if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
     if (!gameState.parent.chapter || typeof gameState.parent.chapter !== 'object') {
-        gameState.parent.chapter = { id: 'demo_ch1', step: 0, completed: false, lastAdvanceAt: 0 };
+        gameState.parent.chapter = { id: 'demo_ch1', step: 0, completed: false, lastAdvanceAt: 0, pulse: false };
     }
     const ch = gameState.parent.chapter;
     if (!chapterDefs[ch.id]) ch.id = 'demo_ch1';
@@ -2989,6 +3001,7 @@ function ensureChapterState() {
     ch.step = Math.max(0, Math.min(chapterDefs[ch.id].steps.length, Math.floor(ch.step)));
     ch.completed = !!ch.completed;
     if (!Number.isFinite(ch.lastAdvanceAt)) ch.lastAdvanceAt = 0;
+    if (typeof ch.pulse !== 'boolean') ch.pulse = false;
 }
 
 function getChapterDef() {
@@ -3116,6 +3129,7 @@ function chapterTick() {
     if (st.done) {
         ch.step += 1;
         ch.lastAdvanceAt = now;
+        ch.pulse = true;
         if (ch.step >= def.steps.length) {
             ch.completed = true;
             showToast(`📖 ${def.title} 완료!`, 'success');
@@ -5863,6 +5877,7 @@ function addRequestFromTemplate(kind) {
     sonSpeech("엄마!! 부탁이 있어요!");
     showToast("📋 아들의 요청이 추가되었습니다.", 'info');
     updateUI();
+    setTimeout(() => pulseElement(els.questAlert, 'soft-pulse'), 0);
     return req;
 }
 
@@ -6385,7 +6400,13 @@ function updateUI() {
                 if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
 
                 const chapterBoxEl = document.getElementById('chapter-box');
-                if (chapterBoxEl) chapterBoxEl.innerHTML = renderChapterHtml();
+                if (chapterBoxEl) {
+                    chapterBoxEl.innerHTML = renderChapterHtml();
+                    if (gameState.parent.chapter?.pulse) {
+                        pulseElement(chapterBoxEl, 'soft-pulse');
+                        gameState.parent.chapter.pulse = false;
+                    }
+                }
 
                 // Top bar: core material preview for current goal
                 if (els.corePill && els.corePillText) {
@@ -6770,6 +6791,8 @@ function addMail(title, text, isGold = false) {
     if (!mailboxOpen) {
         gameState.parent.mailUnread = Math.max(0, (gameState.parent.mailUnread || 0) + 1);
         showToast("📮 편지가 도착했어요!", 'info');
+        pulseElement(els.mailBadge, 'ui-pulse');
+        pulseElement(els.btnMailbox, 'ui-pulse');
     }
     renderMailbox();
     updateUI();
