@@ -15,10 +15,28 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2600);
 }
 
+function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
 // --- Game State ---
-const gameState = {
+const SAVE_KEY = 'hero_mom_2_save_v1';
+const DEFAULT_GAME_STATE = {
+    worldTick: 0,
     parent: {
         gold: 500,
+        smithy: { level: 1, xp: 0 },
+        mailUnread: 0,
+        sonUiTab: 'summary', // 'summary' | 'gear' | 'world'
+        supportPin: null, // { type, ... }
+        uiLocks: { wardrobe: false },
+        shop: { uiTab: 'grocery' },
+        work: { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: 20 },
+        worldCodex: { zones: {} },
+        furniture: {
+            equipped: { bed: 'bed_basic', table: 'table_basic', desk: 'desk_basic', dummy: 'dummy_basic' },
+            owned: { bed_basic: true, table_basic: true, desk_basic: true, dummy_basic: true }
+        },
         upgrades: { bed: 1, table: 1, dummy: 1, desk: 1 },
         inventory: {
             'steak': { name: '🥩 최고급 스테이크', count: 0, type: 'kitchen' },
@@ -27,31 +45,49 @@ const gameState = {
             'book_hero': { name: '📘 영웅학 개론', count: 0, type: 'study' },
             'sandbag': { name: '🏋️ 모래주머니', count: 0, type: 'training' }
         },
+        gearInventory: {
+            helmet: {
+                leather_helmet: { id: 'leather_helmet', name: '가죽 투구', def: 2, count: 0, cost: 200 }
+            },
+            armor: {
+                leather_armor: { id: 'leather_armor', name: '가죽 갑옷', def: 4, count: 0, cost: 350 }
+            },
+            boots: {
+                leather_boots: { id: 'leather_boots', name: '가죽 신발', def: 1, count: 0, cost: 180 }
+            }
+        },
         weaponInventory: {
             'C': { name: '낡은 목검', atk: 2, count: 1 },
             'B': { name: '강철 단검', atk: 5, count: 0 },
             'A': { name: '기사의 장검', atk: 20, count: 0 },
             'S': { name: '🗡️ 드래곤 슬레이어', atk: 100, count: 0 }
         },
+        specialWeaponInventory: {
+            wolf_sword: { id: 'wolf_sword', name: '🐺 늑대의 보검', atk: 14, tier: 'B', count: 0 },
+            relic_sword: { id: 'relic_sword', name: '🏛️ 유적의 보검', atk: 38, tier: 'A', count: 0 },
+            dragon_sword: { id: 'dragon_sword', name: '🐉 드래곤 스워드', atk: 120, tier: 'S', count: 0 }
+        },
         // Loot storage from adventures
         loot: {
             'herb': { name: '🌿 약초', count: 2 },
             'monster_bone': { name: '🦴 몬스터 뼈', count: 0 },
             'magic_crystal': { name: '💎 마법 결정', count: 0 },
-            'rare_hide': { name: '🧶 희귀 가죽', count: 0 }
+            'rare_hide': { name: '🧶 희귀 가죽', count: 0 },
+            'leather': { name: '🧵 가죽', count: 0 },
+            'steel': { name: '🪨 강철', count: 0 },
+            'iron_scrap': { name: '🧩 철 조각', count: 0 },
+            'arcane_dust': { name: '✨ 마력 가루', count: 0 }
         },
         // Farm system
         farm: {
             plots: [
-                { state: 'empty', seedType: null, timer: 0 },
-                { state: 'empty', seedType: null, timer: 0 },
-                { state: 'empty', seedType: null, timer: 0 }
+                { state: 'empty', timer: 0 },
+                { state: 'empty', timer: 0 },
+                { state: 'empty', timer: 0 }
             ],
-            seeds: {
-                'carrot': { name: '🥕 당근 씨앗', count: 3, growTime: 20, emoji: '🥕' },
-                'tomato': { name: '🍅 토마토 씨앗', count: 2, growTime: 30, emoji: '🍅' },
-                'herb_seed': { name: '🌿 약초 씨앗', count: 1, growTime: 25, emoji: '🌿' }
-            }
+            seed: 6,
+            level: 1,
+            xp: 0
         }
     },
     rooms: {
@@ -65,14 +101,100 @@ const gameState = {
         hp: 60, maxHp: 100,
         hunger: 50, maxHunger: 100,
         state: 'IDLE', currentRoom: 'room-desk',
-        weapon: { name: '몽둥이', atk: 1, tier: 'C' },
+        stats: {
+            physAtk: 0,
+            magicAtk: 0,
+            magicRes: 0,
+            agility: 0,
+            accuracy: 0
+        },
+        equipment: {
+            weapon: { id: 'weapon_C', name: '몽둥이', atk: 1, def: 0, tier: 'C' },
+            helmet: { id: 'none_helmet', name: '맨머리', atk: 0, def: 0, tier: 'C' },
+            armor: { id: 'none_armor', name: '허름한 옷', atk: 0, def: 0, tier: 'C' },
+            boots: { id: 'none_boots', name: '맨발', atk: 0, def: 0, tier: 'C' }
+        },
         actionTimer: 0,
         affinity: { trust: 50, affection: 50, rebellion: 0 },
+        personality: {
+            bravery: 50,
+            diligence: 50,
+            morality: 50,     // 선함(0~100) ↔ 악함
+            flexibility: 50,  // 완고(0~100) ↔ 유연
+            endurance: 50,    // 인내
+            intelligence: 50, // 지능
+            calmness: 50,     // 차분함
+            focus: 50         // 집중력
+        }, // bravery: 대담(0~100), diligence: 성실(0~100)
+        trainingMastery: { strength: 0, magic: 0, archery: 0 },
+        injury: null, // { severity, label, remaining, cpMul, riskMul, healMul, hungerDrain }
+        plannedGoal: null, // { zoneId, missionId, diffKey, cp }
         quest: null,
-        adventureEncouraged: false
+        adventure: null,
+        adventureEncouraged: false,
+        nextAdventureBuff: null // { id, name, desc, expMul, goldMul, lootMul, riskMul, fatigueAdd, source }
     },
     firstAdventureDone: false
 };
+
+let gameState = deepClone(DEFAULT_GAME_STATE);
+
+function saveGame() {
+    try {
+        const payload = { v: 1, savedAt: Date.now(), state: gameState };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    } catch (e) {
+        console.warn('saveGame failed', e);
+    }
+}
+
+function mergeDeep(base, incoming) {
+    if (!incoming || typeof incoming !== 'object') return base;
+    if (Array.isArray(incoming)) return incoming.slice();
+    if (!base || typeof base !== 'object' || Array.isArray(base)) base = {};
+    for (const [k, v] of Object.entries(incoming)) {
+        if (v && typeof v === 'object') {
+            base[k] = mergeDeep(base[k], v);
+        } else {
+            base[k] = v;
+        }
+    }
+    return base;
+}
+
+function loadGame() {
+    try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) return false;
+        const payload = JSON.parse(raw);
+        if (!payload || payload.v !== 1 || !payload.state) return false;
+        const merged = deepClone(DEFAULT_GAME_STATE);
+        mergeDeep(merged, payload.state);
+        gameState = merged;
+        // Ensure newly added systems exist
+        ensureSmithy();
+        ensureShopState();
+        ensureLibraryState();
+        ensureFarm();
+        ensureWorkState();
+        ensureWorldCodexState();
+        ensureSonUiState();
+        ensureSupportPinState();
+        cleanupLegacyParentSettings();
+        return true;
+    } catch (e) {
+        console.warn('loadGame failed', e);
+        return false;
+    }
+}
+
+function resetGame() {
+    const ok = window.confirm('정말 초기화할까요? (저장된 데이터가 모두 삭제됩니다)');
+    if (!ok) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    window.location.reload();
+}
+window.resetGame = resetGame;
 
 // --- Upgrade Costs & Effects ---
 const upgradeData = {
@@ -102,11 +224,900 @@ const upgradeData = {
     }
 };
 
-// --- Recipe System ---
+function clampLevel(type, level) {
+    const def = upgradeData[type];
+    if (!def) return 1;
+    const maxLv = Math.max(1, def.effects.length);
+    return Math.max(1, Math.min(maxLv, Math.floor(level || 1)));
+}
+
+function getUpgradeEffectValue(type, level) {
+    const def = upgradeData[type];
+    if (!def) return 0;
+    const lv = clampLevel(type, level);
+    return def.effects[lv - 1] || 0;
+}
+
+function getUpgradeEffectLabel(type, value) {
+    const v = Math.floor(value || 0);
+    if (type === 'bed') return `수면 회복 +${v}HP`;
+    if (type === 'table') return `기본 식사 허기 +${v}`;
+    if (type === 'desk') return `공부 EXP +${v}`;
+    if (type === 'dummy') return `기본 훈련 EXP +${v}`;
+    return `효과 +${v}`;
+}
+
+function getUpgradeEffectPreview(type, currentLv, nextLv) {
+    const cur = getUpgradeEffectValue(type, currentLv);
+    const next = getUpgradeEffectValue(type, nextLv);
+    return `${getUpgradeEffectLabel(type, cur)} → ${getUpgradeEffectLabel(type, next)}`;
+}
+
+function getSmithyXpToNext(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    return 10 + (lv - 1) * 7;
+}
+
+function getSmithyQualityBonus(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    return Math.min(0.25, (lv - 1) * 0.015); // up to +25%
+}
+
+const WORK_ENERGY_REGEN_SECONDS = 20;
+
+function getWorkXpToNext(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    return 8 + (lv - 1) * 6;
+}
+
+function getWorkGoldReward(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    return 20 + (lv - 1) * 2;
+}
+
+function ensureWorkState() {
+    if (!gameState.parent.work || typeof gameState.parent.work !== 'object') {
+        gameState.parent.work = { level: 1, xp: 0, energy: 10, maxEnergy: 10, energyTimer: WORK_ENERGY_REGEN_SECONDS };
+    }
+    const w = gameState.parent.work;
+    if (!Number.isFinite(w.level)) w.level = 1;
+    if (!Number.isFinite(w.xp)) w.xp = 0;
+    if (!Number.isFinite(w.energy)) w.energy = 10;
+    if (!Number.isFinite(w.maxEnergy)) w.maxEnergy = 10;
+    if (!Number.isFinite(w.energyTimer)) w.energyTimer = WORK_ENERGY_REGEN_SECONDS;
+    w.level = Math.max(1, Math.floor(w.level));
+    w.xp = Math.max(0, Math.floor(w.xp));
+    w.maxEnergy = Math.max(10, Math.min(10, Math.floor(w.maxEnergy)));
+    w.energy = Math.max(0, Math.min(w.maxEnergy, Math.floor(w.energy)));
+    w.energyTimer = Math.max(0, Math.floor(w.energyTimer));
+    if (w.energy >= w.maxEnergy) w.energyTimer = WORK_ENERGY_REGEN_SECONDS;
+}
+
+function addWorkXp(amount) {
+    ensureWorkState();
+    const w = gameState.parent.work;
+    const gain = Math.max(0, Math.floor(amount || 0));
+    if (!gain) return;
+    w.xp += gain;
+    let leveled = false;
+    while (true) {
+        const need = getWorkXpToNext(w.level);
+        if (w.xp < need) break;
+        w.xp -= need;
+        w.level += 1;
+        leveled = true;
+    }
+    if (leveled) {
+        showToast(`🪡 부업 숙련 Lv.${w.level}!`, 'levelup');
+        addMail("🪡 부업 숙련", `부업 숙련도가 올랐습니다. (Lv.${w.level})\n이제 한 번에 조금 더 벌 수 있어요.`);
+    }
+}
+
+function workTick() {
+    ensureWorkState();
+    const w = gameState.parent.work;
+    if (w.energy >= w.maxEnergy) return;
+    w.energyTimer = Math.max(0, Math.floor((w.energyTimer || 0) - 1));
+    if (w.energyTimer > 0) return;
+    w.energy = Math.min(w.maxEnergy, w.energy + 1);
+    w.energyTimer = WORK_ENERGY_REGEN_SECONDS;
+}
+
+function doSideJob() {
+    ensureWorkState();
+    const w = gameState.parent.work;
+    if (w.energy <= 0) {
+        showToast("💤 에너지가 부족해요. 잠깐 쉬면 회복됩니다.", 'warning');
+        return;
+    }
+    w.energy -= 1;
+    const reward = getWorkGoldReward(w.level);
+    gameState.parent.gold += reward;
+    addWorkXp(1);
+    if (els.gold) {
+        els.gold.classList.add('gold-pop');
+        setTimeout(() => els.gold.classList.remove('gold-pop'), 500);
+    }
+    showToast(`🪡 부업 완료! (+${reward}G)`, 'success');
+    updateUI();
+}
+window.doSideJob = doSideJob;
+
+function ensureSmithy() {
+    if (!gameState.parent.smithy) gameState.parent.smithy = { level: 1, xp: 0 };
+    if (!Number.isFinite(gameState.parent.smithy.level)) gameState.parent.smithy.level = 1;
+    if (!Number.isFinite(gameState.parent.smithy.xp)) gameState.parent.smithy.xp = 0;
+    if (gameState.parent.smithy.buff && typeof gameState.parent.smithy.buff !== 'object') gameState.parent.smithy.buff = null;
+    if (typeof gameState.parent.smithy.isBusy !== 'boolean') gameState.parent.smithy.isBusy = false;
+    if (!gameState.parent.smithy.uiTab) gameState.parent.smithy.uiTab = 'gacha';
+    gameState.parent.smithy.level = Math.max(1, Math.floor(gameState.parent.smithy.level));
+    gameState.parent.smithy.xp = Math.max(0, Math.floor(gameState.parent.smithy.xp));
+}
+
+function getFarmXpToNext(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    return 6 + (lv - 1) * 5;
+}
+
+function ensureFarm() {
+    if (!gameState.parent.farm || typeof gameState.parent.farm !== 'object') {
+        gameState.parent.farm = {};
+    }
+    const f = gameState.parent.farm;
+
+    // migrate legacy structure (seed types -> single seed)
+    if (f.seeds && typeof f.seeds === 'object' && !Number.isFinite(f.seed)) {
+        const sum = Object.values(f.seeds).reduce((acc, s) => acc + Math.max(0, Math.floor(s?.count || 0)), 0);
+        f.seed = sum;
+    }
+
+    if (!Array.isArray(f.plots)) {
+        f.plots = [
+            { state: 'empty', timer: 0 },
+            { state: 'empty', timer: 0 },
+            { state: 'empty', timer: 0 }
+        ];
+    }
+    // sanitize plots
+    f.plots = f.plots.slice(0, 9).map(p => {
+        const st = p?.state;
+        const state = (st === 'growing' || st === 'ready') ? st : 'empty';
+        return {
+            state,
+            timer: Math.max(0, Math.floor(p?.timer || 0))
+        };
+    });
+    while (f.plots.length < 3) f.plots.push({ state: 'empty', timer: 0 });
+
+    if (!Number.isFinite(f.seed)) f.seed = 6;
+    if (!Number.isFinite(f.level)) f.level = 1;
+    if (!Number.isFinite(f.xp)) f.xp = 0;
+    f.seed = Math.max(0, Math.floor(f.seed));
+    f.level = Math.max(1, Math.floor(f.level));
+    f.xp = Math.max(0, Math.floor(f.xp));
+}
+
+function addFarmXp(amount) {
+    ensureFarm();
+    const gain = Math.max(0, Math.floor(amount || 0));
+    if (!gain) return;
+    const f = gameState.parent.farm;
+    f.xp += gain;
+    let leveled = false;
+    while (true) {
+        const need = getFarmXpToNext(f.level);
+        if (f.xp < need) break;
+        f.xp -= need;
+        f.level += 1;
+        leveled = true;
+    }
+    if (leveled) {
+        showToast(`🌾 농사 레벨 Lv.${f.level}! 더 좋은 작물이 나올 거예요.`, 'levelup');
+        addMail("🌾 농사 레벨업!", `텃밭이 익숙해졌습니다. (Lv.${f.level})`);
+    }
+}
+
+function ensureShopState() {
+    if (!gameState.parent.shop || typeof gameState.parent.shop !== 'object') gameState.parent.shop = {};
+    if (!gameState.parent.shop.uiTab) gameState.parent.shop.uiTab = 'grocery';
+    if (!gameState.parent.bookstore || typeof gameState.parent.bookstore !== 'object') {
+        gameState.parent.bookstore = { nextRollTick: 300, stock: [], lastRollTick: 0 };
+    }
+    if (!Number.isFinite(gameState.parent.bookstore.nextRollTick)) gameState.parent.bookstore.nextRollTick = 300;
+    if (!Array.isArray(gameState.parent.bookstore.stock)) gameState.parent.bookstore.stock = [];
+    if (!Number.isFinite(gameState.parent.bookstore.lastRollTick)) gameState.parent.bookstore.lastRollTick = 0;
+}
+
+function ensureSonUiState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    const t = gameState.parent.sonUiTab;
+    if (t !== 'summary' && t !== 'gear' && t !== 'world') {
+        gameState.parent.sonUiTab = 'summary';
+    }
+}
+
+function ensureSupportPinState() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') gameState.parent = {};
+    if (!('supportPin' in gameState.parent)) gameState.parent.supportPin = null;
+    const p = gameState.parent.supportPin;
+    if (!p) return;
+    if (typeof p !== 'object' || !p.type) gameState.parent.supportPin = null;
+}
+
+function cleanupLegacyParentSettings() {
+    if (!gameState.parent || typeof gameState.parent !== 'object') return;
+    if ('parentingPolicy' in gameState.parent) delete gameState.parent.parentingPolicy;
+    if ('adventureDifficulty' in gameState.parent) delete gameState.parent.adventureDifficulty;
+}
+
+function addSmithyXp(amount) {
+    ensureSmithy();
+    const gain = Math.max(0, Math.floor(amount || 0));
+    if (!gain) return;
+    gameState.parent.smithy.xp += gain;
+    let leveled = false;
+    while (true) {
+        const need = getSmithyXpToNext(gameState.parent.smithy.level);
+        if (gameState.parent.smithy.xp < need) break;
+        gameState.parent.smithy.xp -= need;
+        gameState.parent.smithy.level += 1;
+        leveled = true;
+    }
+    if (leveled) {
+        const lv = gameState.parent.smithy.level;
+        const bonus = Math.round(getSmithyQualityBonus(lv) * 100);
+        showToast(`🔨 대장간 숙련도 Lv.${lv}! (고급 무기 확률 보정 +${bonus}%)`, 'levelup');
+    }
+}
+
+function pickGachaWeapon(opts = {}) {
+    ensureSmithy();
+    const lv = gameState.parent.smithy.level;
+    const mode = opts.mode || 'basic'; // 'basic' | 'premium'
+    let bonus = getSmithyQualityBonus(lv);
+    if (mode === 'premium') bonus += 0.08;
+    if (gameState.parent.smithy.buff?.type === 'lucky' && (gameState.parent.smithy.buff.pulls || 0) > 0) {
+        bonus += gameState.parent.smithy.buff.bonus || 0.08;
+    }
+    bonus = Math.min(0.45, bonus);
+    const tierMult = (tier) => {
+        const b = bonus;
+        if (tier === 'C') return Math.max(0.35, 1 - b * 1.9);
+        if (tier === 'B') return 1;
+        if (tier === 'A') return 1 + b * 1.6;
+        if (tier === 'S') return 1 + b * 2.4;
+        return 1;
+    };
+
+    const weighted = weaponsList.map(w => ({ w, weight: Math.max(0.0001, w.prob * tierMult(w.tier)) }));
+    const total = weighted.reduce((s, x) => s + x.weight, 0);
+    let r = Math.random() * total;
+    for (const x of weighted) {
+        r -= x.weight;
+        if (r <= 0) return x.w;
+    }
+    return weighted[0].w;
+}
+
+const smithyUnlocks = {
+    exchange_pro: { level: 3, label: '숙련 교환' },
+    premium_gacha: { level: 5, label: '고급 뽑기' },
+    temper: { level: 7, label: '정련(행운 부여)' },
+    special_order: { level: 10, label: '특별 주문' }
+};
+
+function isSmithyUnlocked(id) {
+    ensureSmithy();
+    const def = smithyUnlocks[id];
+    if (!def) return false;
+    return gameState.parent.smithy.level >= def.level;
+}
+
+function setSmithyBusy(isBusy) {
+    ensureSmithy();
+    const busy = !!isBusy;
+    gameState.parent.smithy.isBusy = busy;
+    if (els.btnGacha) els.btnGacha.disabled = busy;
+    if (els.btnGachaPremium) els.btnGachaPremium.disabled = busy || !isSmithyUnlocked('premium_gacha');
+    if (els.btnTemper) els.btnTemper.disabled = busy || !isSmithyUnlocked('temper');
+    if (els.btnSpecialOrder) els.btnSpecialOrder.disabled = busy || !isSmithyUnlocked('special_order');
+    if (els.btnExchangeSteelPro) els.btnExchangeSteelPro.disabled = busy || !isSmithyUnlocked('exchange_pro');
+    if (els.btnExchangeCrystalPro) els.btnExchangeCrystalPro.disabled = busy || !isSmithyUnlocked('exchange_pro');
+}
+
+function smithyConsumeLuckyPull() {
+    ensureSmithy();
+    const buff = gameState.parent.smithy.buff;
+    if (!buff || buff.type !== 'lucky') return;
+    if ((buff.pulls || 0) <= 0) return;
+    buff.pulls -= 1;
+    if (buff.pulls <= 0) {
+        gameState.parent.smithy.buff = null;
+        showToast("✨ 정련의 기운이 사라졌습니다.", 'info');
+    }
+}
+
+function performGacha(mode = 'basic') {
+    const m = mode === 'premium' ? 'premium' : 'basic';
+    ensureSmithy();
+    const cost = m === 'premium' ? 2500 : 1000;
+    const xpGain = m === 'premium' ? 6 : 3;
+    if (m === 'premium' && !isSmithyUnlocked('premium_gacha')) {
+        showToast("🎲 고급 뽑기는 대장간 숙련도 Lv.5부터 해금됩니다.", 'warning');
+        return;
+    }
+    if (gameState.parent.gold < cost) {
+        showToast(`골드 부족! (${cost}G 필요)`, 'error');
+        return;
+    }
+
+    gameState.parent.gold -= cost;
+    addSmithyXp(xpGain);
+
+    const picked = pickGachaWeapon({ mode: m });
+    gameState.parent.weaponInventory[picked.tier].count++;
+    smithyConsumeLuckyPull();
+
+    if (els.gachaResult) {
+        els.gachaResult.style.display = 'block';
+        els.gachaResult.innerHTML = `망치질을 하는 중... 🔨 <span style="font-size:0.78rem; color:#94a3b8;">(숙련도 +${xpGain})</span>`;
+    }
+    setSmithyBusy(true);
+    setTimeout(() => {
+        if (els.gachaResult) {
+            els.gachaResult.innerHTML = `[${picked.tier}급] ${picked.name} 획득! → 옷장에 보관됨`;
+            els.gachaResult.className = `gacha-result tier-${picked.tier}`;
+        }
+        setSmithyBusy(false);
+        showToast(`[${picked.tier}급] ${picked.name} 획득!`, picked.tier === 'S' ? 'gold' : picked.tier === 'A' ? 'levelup' : 'info');
+        updateUI();
+    }, 1500);
+}
+
+function temperSmithy() {
+    if (!isSmithyUnlocked('temper')) {
+        showToast("✨ 정련은 대장간 숙련도 Lv.7부터 해금됩니다.", 'warning');
+        return;
+    }
+    ensureLootKey('iron_scrap');
+    ensureLootKey('arcane_dust');
+    if ((gameState.parent.loot.iron_scrap.count || 0) < 8 || (gameState.parent.loot.arcane_dust.count || 0) < 2) {
+        showToast("재료가 부족합니다! (철 조각 8 + 마력 가루 2)", 'error');
+        return;
+    }
+    gameState.parent.loot.iron_scrap.count -= 8;
+    gameState.parent.loot.arcane_dust.count -= 2;
+    ensureSmithy();
+    gameState.parent.smithy.buff = { type: 'lucky', pulls: 3, bonus: 0.08 };
+    addSmithyXp(4);
+    showToast("✨ 정련 완료! 다음 뽑기 3회 동안 행운이 깃듭니다.", 'success');
+    updateUI();
+}
+window.temperSmithy = temperSmithy;
+
+function specialOrderSmithy() {
+    if (!isSmithyUnlocked('special_order')) {
+        showToast("📜 특별 주문은 대장간 숙련도 Lv.10부터 해금됩니다.", 'warning');
+        return;
+    }
+    ensureLootKey('arcane_dust');
+    const cost = 6000;
+    const needDust = 6;
+    if (gameState.parent.gold < cost) {
+        showToast(`골드 부족! (${cost}G 필요)`, 'error');
+        return;
+    }
+    if ((gameState.parent.loot.arcane_dust.count || 0) < needDust) {
+        showToast(`마력 가루 부족! (${needDust}개 필요)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= cost;
+    gameState.parent.loot.arcane_dust.count -= needDust;
+    addSmithyXp(10);
+
+    const r = Math.random();
+    const tier = r < 0.1 ? 'S' : 'A';
+    gameState.parent.weaponInventory[tier].count++;
+    showToast(`📜 특별 주문 성공! [${tier}급] ${gameState.parent.weaponInventory[tier].name} 획득!`, tier === 'S' ? 'gold' : 'levelup');
+    updateUI();
+}
+window.specialOrderSmithy = specialOrderSmithy;
+
+// --- Recipe System (cook in kitchen) ---
 const recipes = [
-    { id: 'homemade_meal', name: '🍲 집밥 정식', desc: '허기 +80', needs: { carrot: 2, tomato: 1 }, type: 'kitchen' },
-    { id: 'herb_potion', name: '🧪 약초 물약', desc: 'HP +60', needs: { herb_seed: 2 }, type: 'kitchen' }
+    { id: 'steak', name: '🥩 최고급 스테이크', desc: '허기 MAX · EXP +30', needs: { meat: 1, salt: 1 }, type: 'kitchen' },
+    { id: 'homemade_meal', name: '🍲 집밥 정식', desc: '허기 +80 · 애정 +3', needs: { carrot: 2, tomato: 1, salt: 1 }, type: 'kitchen' },
+    { id: 'herb_potion', name: '🧪 약초 물약', desc: 'HP +60 · 허기 +20', needs: { herb: 2 }, type: 'kitchen' }
 ];
+
+const ingredientNames = {
+    meat: '🥩 고기',
+    salt: '🧂 소금',
+    carrot: '🥕 당근',
+    tomato: '🍅 토마토',
+    herb: '🌿 약초'
+};
+
+// --- Bookstore & Bookshelf ---
+const bookGradeInfo = {
+    C: { label: 'C', color: '#64748b' },
+    B: { label: 'B', color: '#0ea5e9' },
+    A: { label: 'A', color: '#8b5cf6' },
+    S: { label: 'S', color: '#f59e0b' }
+};
+
+const bookCatalog = [
+    { id: 'book_hero', grade: 'C', name: '📘 영웅학 개론', cost: 150, topics: ['adventure', 'discipline'], effects: { exp: 60, diligence: 2, bravery: 1 }, desc: '기초 체계 · 독서 후 EXP 보너스' },
+    { id: 'book_cook', grade: 'C', name: '🍲 따뜻한 집밥 레시피', cost: 120, topics: ['life'], effects: { affection: 2, calmness: 1 }, desc: '포근한 마음 · 관계/차분함' },
+    { id: 'book_focus', grade: 'C', name: '🧠 집중력 훈련법', cost: 140, topics: ['archery', 'discipline'], effects: { focus: 2, accuracy: 1 }, desc: '집중/명중' },
+    { id: 'book_sword', grade: 'B', name: '🗡️ 검술 입문', cost: 260, topics: ['strength', 'adventure'], effects: { physAtk: 1, bravery: 1, exp: 25 }, desc: '물리 공격/대담' },
+    { id: 'book_shield', grade: 'B', name: '🛡️ 튼튼한 마음과 몸', cost: 280, topics: ['strength', 'discipline'], effects: { endurance: 2, maxHp: 10 }, desc: '인내/최대체력' },
+    { id: 'book_magic', grade: 'B', name: '✨ 마법의 기초', cost: 310, topics: ['magic'], effects: { magicAtk: 1, intelligence: 2 }, desc: '마공/지능' },
+    { id: 'book_calm', grade: 'B', name: '🍃 숨 고르기', cost: 240, topics: ['life', 'magic'], effects: { calmness: 2, magicRes: 1 }, desc: '차분/마저' },
+    { id: 'book_archery', grade: 'A', name: '🏹 사격 교본', cost: 520, topics: ['archery'], effects: { agility: 1, accuracy: 2, focus: 2 }, desc: '민첩/명중/집중' },
+    { id: 'book_spell', grade: 'A', name: '📗 정령문법', cost: 560, topics: ['magic', 'discipline'], effects: { intelligence: 2, magicAtk: 2, magicRes: 1 }, desc: '지능/마공/마저' },
+    { id: 'book_knight', grade: 'A', name: '📕 기사도 수련', cost: 490, topics: ['strength', 'discipline'], effects: { physAtk: 2, endurance: 2, diligence: 1 }, desc: '물공/인내/성실' },
+    { id: 'book_legend', grade: 'S', name: '📜 전설의 기록: 빛의 수호자', cost: 980, topics: ['adventure', 'magic'], effects: { magicAtk: 2, magicRes: 2, trust: 2, exp: 50 }, desc: '희귀 · 성장 큰 폭' },
+    { id: 'book_hunter', grade: 'S', name: '🦌 명사수의 이야기', cost: 920, topics: ['archery', 'adventure'], effects: { accuracy: 2, agility: 2, bravery: 2 }, desc: '희귀 · 사격/대담' }
+];
+
+const bookById = (() => {
+    const m = {};
+    for (const b of bookCatalog) m[b.id] = b;
+    return m;
+})();
+
+function ensureLibraryState() {
+    if (!gameState.parent.library || typeof gameState.parent.library !== 'object') {
+        gameState.parent.library = { shelfLevel: 1, owned: {}, read: {}, shelf: [], shelfBias: [] };
+    }
+    const lib = gameState.parent.library;
+    if (!Number.isFinite(lib.shelfLevel)) lib.shelfLevel = 1;
+    lib.shelfLevel = Math.max(1, Math.min(5, Math.floor(lib.shelfLevel)));
+    if (!lib.owned || typeof lib.owned !== 'object') lib.owned = {};
+    if (!lib.read || typeof lib.read !== 'object') lib.read = {};
+    if (!Array.isArray(lib.shelf)) lib.shelf = [];
+    if (!Array.isArray(lib.shelfBias)) lib.shelfBias = [];
+
+    const slots = getBookshelfSlots(lib.shelfLevel);
+    while (lib.shelf.length < slots) lib.shelf.push(null);
+    lib.shelf = lib.shelf.slice(0, slots);
+    while (lib.shelfBias.length < slots) lib.shelfBias.push(Math.random());
+    lib.shelfBias = lib.shelfBias.slice(0, slots);
+
+    // migrate legacy "inventory book_hero" into library owned
+    if (gameState.parent.inventory?.book_hero?.count > 0) {
+        lib.owned.book_hero = true;
+        if (typeof lib.read.book_hero !== 'boolean') lib.read.book_hero = false;
+        gameState.parent.inventory.book_hero.count = 0;
+    }
+    // ensure initial ownership: none by default
+}
+
+function getBookshelfSlots(level) {
+    const lv = Math.max(1, Math.min(5, Math.floor(level || 1)));
+    return lv; // 1~5
+}
+
+function getBookEffectSummary(book) {
+    if (!book) return '';
+    const e = book.effects || {};
+    const parts = [];
+    if (e.exp) parts.push(`EXP +${e.exp}`);
+    if (e.maxHp) parts.push(`최대HP +${e.maxHp}`);
+    if (e.physAtk) parts.push(`물공 +${e.physAtk}`);
+    if (e.magicAtk) parts.push(`마공 +${e.magicAtk}`);
+    if (e.magicRes) parts.push(`마저 +${e.magicRes}`);
+    if (e.agility) parts.push(`민첩 +${e.agility}`);
+    if (e.accuracy) parts.push(`명중 +${e.accuracy}`);
+    if (e.bravery) parts.push(`대담 +${e.bravery}`);
+    if (e.diligence) parts.push(`성실 +${e.diligence}`);
+    if (e.endurance) parts.push(`인내 +${e.endurance}`);
+    if (e.intelligence) parts.push(`지능 +${e.intelligence}`);
+    if (e.calmness) parts.push(`차분 +${e.calmness}`);
+    if (e.focus) parts.push(`집중 +${e.focus}`);
+    if (e.trust) parts.push(`신뢰 +${e.trust}`);
+    if (e.affection) parts.push(`애정 +${e.affection}`);
+    if (e.rebellion) parts.push(`반항 ${e.rebellion > 0 ? '+' : ''}${e.rebellion}`);
+    return parts.join(' · ');
+}
+
+function rollFromWeights(items) {
+    const total = items.reduce((acc, it) => acc + (it.w || 0), 0);
+    if (total <= 0) return items[0];
+    let r = Math.random() * total;
+    for (const it of items) {
+        r -= (it.w || 0);
+        if (r <= 0) return it;
+    }
+    return items[items.length - 1];
+}
+
+function rollBookstoreStock() {
+    ensureShopState();
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    const pool = bookCatalog.filter(b => !lib.owned[b.id]);
+    const pickUnique = (arr, n) => {
+        const copy = [...arr];
+        const out = [];
+        while (copy.length && out.length < n) {
+            const idx = Math.floor(Math.random() * copy.length);
+            out.push(copy.splice(idx, 1)[0]);
+        }
+        return out;
+    };
+
+    const commons = pool.filter(b => b.grade === 'C' || b.grade === 'B');
+    const rares = pool.filter(b => b.grade === 'A' || b.grade === 'S');
+    const stock = [];
+
+    stock.push(...pickUnique(commons, 3));
+    if (rares.length) {
+        const r = rollFromWeights([
+            { grade: 'A', w: 85 },
+            { grade: 'S', w: 15 }
+        ]);
+        const candidates = pool.filter(b => b.grade === r.grade);
+        if (candidates.length) stock.push(pickUnique(candidates, 1)[0]);
+        else stock.push(pickUnique(rares, 1)[0]);
+    } else if (commons.length) {
+        stock.push(pickUnique(commons, 1)[0]);
+    }
+
+    gameState.parent.bookstore.stock = stock.filter(Boolean).map(b => b.id);
+    gameState.parent.bookstore.lastRollTick = gameState.worldTick || 0;
+}
+
+function updateBookstoreRotation() {
+    ensureShopState();
+    ensureLibraryState();
+    const bs = gameState.parent.bookstore;
+    const now = Math.max(0, Math.floor(gameState.worldTick || 0));
+    if (!Number.isFinite(bs.nextRollTick) || bs.nextRollTick <= 0) bs.nextRollTick = now + 300;
+
+    if (!bs.stock || !bs.stock.length) {
+        rollBookstoreStock();
+        bs.nextRollTick = now + 300;
+        return;
+    }
+
+    if (now >= bs.nextRollTick) {
+        rollBookstoreStock();
+        bs.nextRollTick = now + 300;
+    }
+}
+
+function renderBookstoreUI() {
+    const root = document.getElementById('bookstore-stock');
+    if (!root) return;
+    ensureShopState();
+    ensureLibraryState();
+    updateBookstoreRotation();
+
+    const bs = gameState.parent.bookstore;
+    const lib = gameState.parent.library;
+    const now = Math.max(0, Math.floor(gameState.worldTick || 0));
+    const remain = Math.max(0, Math.floor((bs.nextRollTick || 0) - now));
+    const timerEl = document.getElementById('bookstore-timer');
+    if (timerEl) timerEl.innerText = formatMmSs(remain);
+
+    const upDesc = document.getElementById('bookshelf-upgrade-desc');
+    if (upDesc) {
+        const slots = getBookshelfSlots(lib.shelfLevel);
+        const costs = getBookshelfUpgradeCost(lib.shelfLevel + 1);
+        upDesc.innerText = lib.shelfLevel >= 5
+            ? `현재 슬롯: ${slots}/5 · 최고 단계입니다.`
+            : `현재 슬롯: ${slots}/5 · 다음 업그레이드: ${getBookshelfSlots(lib.shelfLevel + 1)}슬롯 (비용 ${costs}G)`;
+    }
+    const upBtn = document.getElementById('btn-bookshelf-upgrade');
+    if (upBtn) upBtn.disabled = lib.shelfLevel >= 5;
+
+    const stock = (bs.stock || []).map(id => bookById[id]).filter(Boolean);
+    if (!stock.length) {
+        root.innerHTML = `<div class="hint-card" style="margin-top:10px;"><b>오늘은 품절…</b><div style="margin-top:6px; font-size:0.82rem; color:#64748b;">이미 모든 책을 소장한 것 같아요.</div></div>`;
+        return;
+    }
+
+    let html = '';
+    for (const b of stock) {
+        const g = bookGradeInfo[b.grade] || bookGradeInfo.C;
+        const owned = !!lib.owned[b.id];
+        html += `
+          <div class="hint-card" style="margin-top:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+              <div style="font-weight:1000; color:#0f172a;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:20px; padding:0 8px; border-radius:999px; background:${g.color}; color:#fff; font-size:0.72rem; font-weight:1000;">${g.label}</span>
+                <span style="margin-left:6px;">${b.name}</span>
+                <div style="margin-top:4px; font-size:0.78rem; color:#64748b;">${b.desc || ''}</div>
+                <div style="margin-top:6px; font-size:0.78rem; color:#475569;">효과: <b>${getBookEffectSummary(b) || '-'}</b></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+                <div style="font-weight:1000; color:#0f172a;">${b.cost}G</div>
+                <button class="action-btn" style="margin-top:0; width:auto; padding:6px 12px; background:${owned ? '#94a3b8' : '#0f172a'};" ${owned ? 'disabled' : ''} onclick="buyBook('${b.id}')">${owned ? '구매 완료' : '구매'}</button>
+              </div>
+            </div>
+          </div>
+        `;
+    }
+    root.innerHTML = html;
+}
+
+function buyBook(bookId) {
+    ensureShopState();
+    ensureLibraryState();
+    updateBookstoreRotation();
+    const b = bookById[bookId];
+    if (!b) return;
+    const lib = gameState.parent.library;
+    if (lib.owned[bookId]) {
+        showToast("이미 소장한 책입니다.", 'warning');
+        return;
+    }
+    const bs = gameState.parent.bookstore;
+    if (!bs.stock?.includes(bookId)) {
+        showToast("지금은 입고되지 않은 책입니다.", 'warning');
+        return;
+    }
+    if (gameState.parent.gold < b.cost) {
+        showToast(`골드 부족! (${b.cost}G 필요)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= b.cost;
+    lib.owned[bookId] = true;
+    if (typeof lib.read[bookId] !== 'boolean') lib.read[bookId] = false;
+    showToast(`${b.name} 구매! (서재로 가져갑니다)`, 'success');
+    addMail("📚 서점", `${b.name}을(를) 구매했습니다. 책장에 꽂아두면 아들이 읽을지도 몰라요.`);
+    updateUI();
+}
+window.buyBook = buyBook;
+
+function getBookshelfUpgradeCost(nextLevel) {
+    const lv = Math.max(1, Math.min(5, Math.floor(nextLevel || 1)));
+    const costs = { 2: 400, 3: 900, 4: 1800, 5: 3400 };
+    return costs[lv] || 0;
+}
+
+function buyBookshelfUpgrade() {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    if (lib.shelfLevel >= 5) {
+        showToast("이미 최고 단계 책장입니다.", 'warning');
+        return;
+    }
+    const nextLv = lib.shelfLevel + 1;
+    const cost = getBookshelfUpgradeCost(nextLv);
+    if (gameState.parent.gold < cost) {
+        showToast(`골드 부족! (${cost}G 필요)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= cost;
+    lib.shelfLevel = nextLv;
+    ensureLibraryState();
+    showToast(`📚 책장 업그레이드! (슬롯 ${getBookshelfSlots(nextLv)}개)`, 'levelup');
+    updateUI();
+}
+window.buyBookshelfUpgrade = buyBookshelfUpgrade;
+
+function updateDeskSlotUI() {
+    const slotEl = els.slots?.['room-desk'];
+    if (!slotEl) return;
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    const slots = getBookshelfSlots(lib.shelfLevel);
+    const placed = lib.shelf.filter(Boolean).length;
+    slotEl.classList.toggle('filled', placed > 0);
+    slotEl.innerHTML = `<span class="slot-label">📚 책장 ${placed}/${slots}</span>${placed > 0 ? '📚' : '➕'}`;
+}
+
+function openBookshelfManager() {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    const slots = getBookshelfSlots(lib.shelfLevel);
+    const placed = lib.shelf.filter(Boolean).length;
+
+    currentInventoryMode = 'bookshelf';
+    currentTargetRoom = 'room-desk';
+    if (els.invDesc) els.invDesc.innerText = `책장 슬롯 ${placed}/${slots} · 배치한 책은 아들이 마음이 갈 때 읽을지도 몰라요.`;
+    els.invList.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'margin-bottom:10px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; font-size:0.82rem; color:#475569; line-height:1.35;';
+    header.innerHTML = `<b>📚 책장</b><br>슬롯: <b>${placed}/${slots}</b> · 미독서 책을 배치해둘 수 있어요.`;
+    els.invList.appendChild(header);
+
+    // Slots
+    lib.shelf.forEach((bookId, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:8px;';
+        if (bookId) {
+            const b = bookById[bookId];
+            const g = bookGradeInfo[b?.grade] || bookGradeInfo.C;
+            row.innerHTML = `
+              <div style="min-width:0;">
+                <div style="font-weight:1000; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  <span style="display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:20px; padding:0 8px; border-radius:999px; background:${g.color}; color:#fff; font-size:0.72rem; font-weight:1000;">${g.label}</span>
+                  <span style="margin-left:6px;">${b?.name || bookId}</span>
+                </div>
+                <div style="margin-top:4px; font-size:0.78rem; color:#64748b;">${getBookEffectSummary(b) || '-'}</div>
+              </div>
+            `;
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.style.cssText = 'width:auto; padding:6px 12px; margin:0; background:#ef4444;';
+            btn.innerText = '빼기';
+            btn.onclick = () => removeBookFromShelf(idx);
+            row.appendChild(btn);
+        } else {
+            row.innerHTML = `<div style="font-weight:900; color:#64748b;">슬롯 ${idx + 1} · 빈 칸</div>`;
+        }
+        els.invList.appendChild(row);
+    });
+
+    const divider = document.createElement('div');
+    divider.style.cssText = 'margin:12px 0 8px; border-top:1px solid #e2e8f0;';
+    els.invList.appendChild(divider);
+
+    const listTitle = document.createElement('div');
+    listTitle.style.cssText = 'font-weight:1000; color:#475569; margin-bottom:8px; font-size:0.85rem;';
+    listTitle.innerText = '배치 가능한 책 (소장 · 미독서)';
+    els.invList.appendChild(listTitle);
+
+    const placeable = bookCatalog.filter(b => lib.owned[b.id] && !lib.read[b.id] && !lib.shelf.includes(b.id));
+    if (!placeable.length) {
+        const p = document.createElement('div');
+        p.style.cssText = 'color:#94a3b8; font-size:0.82rem;';
+        p.innerText = '배치할 수 있는 책이 없습니다. (서점에서 책을 구매하세요)';
+        els.invList.appendChild(p);
+    } else {
+        placeable.forEach(b => {
+            const btn = document.createElement('button');
+            btn.className = 'item-btn';
+            btn.innerText = `${b.name} [${b.grade}] - ${getBookEffectSummary(b)}`;
+            btn.disabled = placed >= slots;
+            btn.onclick = () => placeBookToShelf(b.id);
+            els.invList.appendChild(btn);
+        });
+    }
+
+    els.invModal.style.display = 'flex';
+}
+window.openBookshelfManager = openBookshelfManager;
+
+function placeBookToShelf(bookId) {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    if (!lib.owned[bookId] || lib.read[bookId]) {
+        showToast("배치할 수 없는 책입니다.", 'warning');
+        return;
+    }
+    if (lib.shelf.includes(bookId)) {
+        showToast("이미 책장에 배치된 책입니다.", 'warning');
+        return;
+    }
+    const idx = lib.shelf.findIndex(x => !x);
+    if (idx < 0) {
+        showToast("책장에 빈 칸이 없습니다.", 'warning');
+        return;
+    }
+    lib.shelf[idx] = bookId;
+    lib.shelfBias[idx] = Math.random();
+    showToast("📚 책장에 배치했습니다.", 'success');
+    openBookshelfManager();
+    updateDeskSlotUI();
+    updateUI();
+}
+
+function removeBookFromShelf(slotIndex) {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    if (slotIndex < 0 || slotIndex >= lib.shelf.length) return;
+    lib.shelf[slotIndex] = null;
+    showToast("📚 책장에서 뺐습니다.", 'info');
+    openBookshelfManager();
+    updateDeskSlotUI();
+    updateUI();
+}
+
+function computeBookInterest(book, slotBias = 0) {
+    if (!book) return 0;
+    const p = gameState.son.personality || {};
+    const m = gameState.son.trainingMastery || {};
+    const norm = (v) => Math.max(0, Math.min(1, (v || 0) / 100));
+    const mastery = (v) => Math.max(0, Math.min(1, (v || 0) / 80));
+    const desire = {
+        strength: 0.55 * norm(p.endurance) + 0.45 * mastery(m.strength),
+        magic: 0.55 * norm(p.intelligence) + 0.45 * mastery(m.magic),
+        archery: 0.55 * norm(p.focus) + 0.45 * mastery(m.archery),
+        discipline: 0.6 * norm(p.diligence) + 0.4 * norm(gameState.son.affinity?.trust),
+        life: 0.55 * norm(p.calmness) + 0.45 * norm(gameState.son.affinity?.affection),
+        adventure: 0.7 * norm(p.bravery) + 0.3 * norm(p.diligence)
+    };
+    const topics = book.topics || [];
+    if (!topics.length) return 0;
+    const base = topics.reduce((acc, t) => acc + (desire[t] ?? 0), 0) / topics.length;
+    const score = (base * 0.82) + (Math.max(0, Math.min(1, slotBias)) * 0.18);
+    return Math.max(0, Math.min(1, score));
+}
+
+function applyBookEffects(book) {
+    if (!book) return [];
+    const e = book.effects || {};
+    const gained = [];
+    const addStat = (k, label) => {
+        if (!e[k]) return;
+        gameState.son.stats[k] = (gameState.son.stats[k] || 0) + e[k];
+        gained.push(`${label} +${e[k]}`);
+    };
+    const addTrait = (k, label) => {
+        if (!e[k]) return;
+        gameState.son.personality[k] = clampInt((gameState.son.personality[k] || 0) + e[k], 0, 100);
+        gained.push(`${label} +${e[k]}`);
+    };
+    if (e.maxHp) {
+        gameState.son.maxHp += e.maxHp;
+        gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + Math.floor(e.maxHp * 0.6));
+        gained.push(`최대HP +${e.maxHp}`);
+    }
+    addStat('physAtk', '물공');
+    addStat('magicAtk', '마공');
+    addStat('magicRes', '마저');
+    addStat('agility', '민첩');
+    addStat('accuracy', '명중');
+    addTrait('bravery', '대담');
+    addTrait('diligence', '성실');
+    addTrait('endurance', '인내');
+    addTrait('intelligence', '지능');
+    addTrait('calmness', '차분');
+    addTrait('focus', '집중');
+    if (e.trust) {
+        gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + e.trust, 0, 100);
+        gained.push(`신뢰 +${e.trust}`);
+    }
+    if (e.affection) {
+        gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + e.affection, 0, 100);
+        gained.push(`애정 +${e.affection}`);
+    }
+    if (Number.isFinite(e.rebellion) && e.rebellion !== 0) {
+        gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) + e.rebellion, 0, 100);
+        gained.push(`반항 ${e.rebellion > 0 ? '+' : ''}${e.rebellion}`);
+    }
+    if (e.exp) {
+        gameState.son.exp += e.exp;
+        gained.push(`EXP +${e.exp}`);
+    }
+    return gained;
+}
+
+function tryReadFromBookshelf() {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    const entries = lib.shelf
+        .map((id, idx) => ({ id, idx, bias: lib.shelfBias[idx] }))
+        .filter(x => !!x.id)
+        .map(x => ({ ...x, book: bookById[x.id], interest: computeBookInterest(bookById[x.id], x.bias) }))
+        .filter(x => !!x.book);
+
+    if (!entries.length) return null;
+
+    entries.sort((a, b) => b.interest - a.interest);
+    const best = entries[0];
+
+    // Below threshold -> likely to ignore forever (unless personality changes later)
+    if (best.interest < 0.42) return { read: false, reason: 'no_interest' };
+
+    const chance = best.interest >= 0.62 ? Math.min(0.92, best.interest) : Math.min(0.55, best.interest - 0.12);
+    if (Math.random() > chance) return { read: false, reason: 'skip' };
+
+    const bookId = best.id;
+    const b = best.book;
+    const gained = applyBookEffects(b);
+    lib.read[bookId] = true;
+    lib.shelf[best.idx] = null;
+    showToast(`📚 ${b.name} 완독! ${gained.length ? `(+${gained.join(', ')})` : ''}`, 'levelup');
+    addMail("📚 독서 완료", `아들이 ${b.name}을(를) 읽었습니다.\n${gained.length ? `성장: ${gained.join(' · ')}` : ''}`);
+    return { read: true, book: b, gained };
+}
 
 // --- Loot Table (by adventure tier) ---
 const lootTable = [
@@ -114,10 +1125,8 @@ const lootTable = [
     { name: '🦴 몬스터 뼈', key: 'monster_bone', prob: 30, minLv: 1 },
     { name: '💎 마법 결정', key: 'magic_crystal', prob: 15, minLv: 2 },
     { name: '🧶 희귀 가죽', key: 'rare_hide', prob: 15, minLv: 3 },
-    // Seeds as adventure loot!
-    { name: '🥕 당근 씨앗', key: 'seed_carrot', prob: 25, minLv: 1 },
-    { name: '🍅 토마토 씨앗', key: 'seed_tomato', prob: 15, minLv: 1 },
-    { name: '🌿 약초 씨앗', key: 'seed_herb', prob: 20, minLv: 2 }
+    // Seeds (single currency)
+    { name: '🌱 씨앗', key: 'seed', prob: 32, minLv: 1 }
 ];
 
 // --- DOM Elements ---
@@ -133,28 +1142,53 @@ const els = {
     affRebellion: document.getElementById('aff-rebellion'),
     sprite: document.getElementById('son-sprite'),
     speech: document.getElementById('son-speech'),
-    roomTabs: document.querySelectorAll('.room-tab'),
+    mainTabs: document.querySelectorAll('.main-tab'),
+    views: {
+        home: document.getElementById('view-home'),
+        son: document.getElementById('view-son'),
+        town: document.getElementById('view-town')
+    },
+    roomTabs: document.querySelectorAll('#view-home .room-tab'),
     roomViews: {
         'room-bed': document.getElementById('view-room-bed'),
+        'room-wardrobe': document.getElementById('view-room-wardrobe'),
         'room-desk': document.getElementById('view-room-desk'),
         'room-table': document.getElementById('view-room-table'),
-        'room-dummy': document.getElementById('view-room-dummy')
+        'room-dummy': document.getElementById('view-room-dummy'),
+        'room-farm': document.getElementById('view-room-farm')
     },
     slots: {
         'room-table': document.getElementById('slot-kitchen'),
         'room-desk': document.getElementById('slot-study'),
-        'room-dummy': document.getElementById('slot-training'),
-        'room-bed': document.getElementById('slot-wardrobe')
+        'room-dummy': document.getElementById('slot-training')
     },
     invModal: document.getElementById('inv-modal'),
     invList: document.getElementById('inv-list'),
+    invDesc: document.getElementById('inv-desc'),
+    furnShop: document.getElementById('furn-shop'),
+    furnModal: document.getElementById('furn-modal'),
+    furnModalTitle: document.getElementById('furn-modal-title'),
+    furnModalSub: document.getElementById('furn-modal-sub'),
+    furnModalList: document.getElementById('furn-modal-list'),
     weaponInventoryList: document.getElementById('weapon-inventory-list'),
-    sysTabs: document.querySelectorAll('.sys-tab'),
-    sysContents: document.querySelectorAll('.sys-content'),
+    townHub: document.getElementById('town-hub'),
+    townDetail: document.getElementById('town-detail'),
+    townCards: document.querySelectorAll('#town-hub .town-card'),
+    townBack: document.getElementById('btn-town-back'),
+    townTitle: document.getElementById('town-title'),
+    townSubtabs: document.getElementById('town-subtabs'),
+    sysContents: document.querySelectorAll('#view-town .sys-content'),
     btnWork: document.getElementById('btn-work'),
     btnGacha: document.getElementById('btn-gacha'),
+    btnGachaPremium: document.getElementById('btn-gacha-premium'),
+    btnTemper: document.getElementById('btn-temper'),
+    btnSpecialOrder: document.getElementById('btn-special-order'),
+    btnExchangeSteelPro: document.getElementById('btn-exchange-steel-pro'),
+    btnExchangeCrystalPro: document.getElementById('btn-exchange-crystal-pro'),
     gachaResult: document.getElementById('gacha-result'),
-    mailList: document.querySelector('.mail-list'),
+    mailList: document.getElementById('mailbox-list'),
+    mailboxModal: document.getElementById('mailbox-modal'),
+    mailBadge: document.getElementById('mail-badge'),
     questAlert: document.getElementById('quest-alert'),
     questTimer: document.getElementById('quest-timer'),
     questModal: document.getElementById('quest-modal'),
@@ -169,8 +1203,12 @@ const els = {
     advSceneSub: document.getElementById('adv-scene-sub'),
     advProgress: document.getElementById('adv-progress'),
     btnEncourage: document.getElementById('btn-encourage'),
+    adventureInfo: document.getElementById('adventure-info'),
+    advEta: document.getElementById('adv-eta'),
+    advLast: document.getElementById('adv-last'),
     farmGrid: document.getElementById('farm-grid'),
-    cookList: document.getElementById('cook-list')
+    cookList: document.getElementById('cook-list'),
+    buffInfo: document.getElementById('buff-info')
 };
 
 const weaponsList = [
@@ -180,12 +1218,377 @@ const weaponsList = [
     { name: '🗡️ 드래곤 슬레이어', atk: 100, tier: 'S', prob: 5 }
 ];
 
+// ============================================================
+// Furniture Models (buy in town -> swap at home, slot 강화 유지)
+// ============================================================
+const furnitureModels = {
+    bed: [
+        { id: 'bed_basic', name: '기본 침대', desc: '평범하지만 든든해요.', effect: '특수효과 없음', cost: 0 },
+        { id: 'bed_wool', name: '양모 침대', desc: '포근한 감촉이 좋아요.', effect: '수면 후 35%: 다음 모험 골드 x1.08', cost: 900 },
+        { id: 'bed_canopy', name: '캐노피 침대', desc: '아늑한 꿈을 꾸게 해줘요.', effect: '수면 후 50%: 다음 모험 EXP x1.20', cost: 1600 },
+        { id: 'bed_herbal', name: '약초 향 침대', desc: '은은한 향이 퍼져요.', effect: '수면 후 45%: 다음 모험 부상위험 x0.85 · 피로완화 +5%', cost: 2400 },
+        { id: 'bed_star', name: '별빛 침대', desc: '밤마다 반짝이는 이불.', effect: '수면 후 55%: 다음 모험 전리품 x1.12 · EXP x1.08', cost: 4200 }
+    ],
+    table: [
+        { id: 'table_basic', name: '기본 식탁', desc: '정갈한 한 끼의 시작.', effect: '특수효과 없음', cost: 0 },
+        { id: 'table_picnic', name: '피크닉 식탁', desc: '햇살 같은 분위기.', effect: '식사 후 30%: 애정 +2', cost: 700 },
+        { id: 'table_wood', name: '원목 식탁', desc: '오래 쓸수록 멋이 나요.', effect: '식사 후 25%: 성실 +1', cost: 1400 },
+        { id: 'table_chef', name: '셰프 식탁', desc: '요리가 더 즐거워져요.', effect: '식사 후 30%: 다음 모험 피로완화 +4%', cost: 2300 },
+        { id: 'table_royal', name: '왕실 식탁', desc: '특별한 날의 식사.', effect: '식사 후 25%: 신뢰 +2 · 반항 -1', cost: 3800 }
+    ],
+    desk: [
+        { id: 'desk_basic', name: '기본 책상', desc: '차분히 앉을 수 있어요.', effect: '특수효과 없음', cost: 0 },
+        { id: 'desk_pine', name: '소나무 책상', desc: '나무 결이 따뜻해요.', effect: '공부 후 20%: 성실 +1', cost: 800 },
+        { id: 'desk_lamp', name: '램프 책상', desc: '밤에도 집중이 잘돼요.', effect: '공부 후 18%: 신뢰 +2', cost: 1500 },
+        { id: 'desk_scholar', name: '학자 책상', desc: '책 읽는 맛이 나요.', effect: '공부 후 15%: 성실 +1 · 대담 -1(신중)', cost: 2600 },
+        { id: 'desk_arcane', name: '마법 책상', desc: '신기한 잉크가 마르지 않아요.', effect: '공부 후 12%: 다음 모험 EXP x1.12 · 부상위험 x0.92', cost: 4300 }
+    ],
+    dummy: [
+        { id: 'dummy_basic', name: '기본 훈련장', desc: '몸을 움직이기 좋아요.', effect: '훈련 타입이 랜덤(근력/마법/사격)', cost: 0 },
+        { id: 'dummy_strength', name: '근력 훈련장', desc: '기초 체력을 다져요.', effect: '훈련 시: 최대HP +2 · 물공 +1 · 인내 +1', cost: 1000 },
+        { id: 'dummy_magic', name: '마법 훈련장', desc: '기운이 몽글몽글해요.', effect: '훈련 시: 마공 +1 · 마저 +1 · 지능 +1 · 차분 +1', cost: 1700 },
+        { id: 'dummy_archery', name: '사격 훈련장', desc: '집중력이 좋아져요.', effect: '훈련 시: 물공 +1 · 민첩 +1 · 명중 +1 · 집중 +1', cost: 2600 },
+        { id: 'dummy_legend', name: '전설 훈련장', desc: '땀방울이 빛나요.', effect: '훈련 타입이 아들의 성향/숙련에 맞춰 선택', cost: 5200 }
+    ]
+};
+
+function ensureFurnitureState() {
+    if (!gameState.parent.furniture || typeof gameState.parent.furniture !== 'object') {
+        gameState.parent.furniture = { equipped: {}, owned: {} };
+    }
+    if (!gameState.parent.furniture.equipped) gameState.parent.furniture.equipped = {};
+    if (!gameState.parent.furniture.owned) gameState.parent.furniture.owned = {};
+    const defaults = { bed: 'bed_basic', table: 'table_basic', desk: 'desk_basic', dummy: 'dummy_basic' };
+    Object.entries(defaults).forEach(([slot, id]) => {
+        if (!gameState.parent.furniture.equipped[slot]) gameState.parent.furniture.equipped[slot] = id;
+        gameState.parent.furniture.owned[id] = true;
+    });
+}
+
+function ensureSonGrowthState() {
+    if (!gameState.son.stats || typeof gameState.son.stats !== 'object') {
+        gameState.son.stats = { physAtk: 0, magicAtk: 0, magicRes: 0, agility: 0, accuracy: 0 };
+    }
+    const s = gameState.son.stats;
+    if (!Number.isFinite(s.physAtk)) s.physAtk = 0;
+    if (!Number.isFinite(s.magicAtk)) s.magicAtk = 0;
+    if (!Number.isFinite(s.magicRes)) s.magicRes = 0;
+    if (!Number.isFinite(s.agility)) s.agility = 0;
+    if (!Number.isFinite(s.accuracy)) s.accuracy = 0;
+
+    if (!gameState.son.personality || typeof gameState.son.personality !== 'object') {
+        gameState.son.personality = { bravery: 50, diligence: 50 };
+    }
+    const p = gameState.son.personality;
+    if (!Number.isFinite(p.bravery)) p.bravery = 50;
+    if (!Number.isFinite(p.diligence)) p.diligence = 50;
+    if (!Number.isFinite(p.morality)) p.morality = 50;
+    if (!Number.isFinite(p.flexibility)) p.flexibility = 50;
+    if (!Number.isFinite(p.endurance)) p.endurance = 50;
+    if (!Number.isFinite(p.intelligence)) p.intelligence = 50;
+    if (!Number.isFinite(p.calmness)) p.calmness = 50;
+    if (!Number.isFinite(p.focus)) p.focus = 50;
+
+    p.bravery = clampInt(p.bravery, 0, 100);
+    p.diligence = clampInt(p.diligence, 0, 100);
+    p.morality = clampInt(p.morality, 0, 100);
+    p.flexibility = clampInt(p.flexibility, 0, 100);
+    p.endurance = clampInt(p.endurance, 0, 100);
+    p.intelligence = clampInt(p.intelligence, 0, 100);
+    p.calmness = clampInt(p.calmness, 0, 100);
+    p.focus = clampInt(p.focus, 0, 100);
+
+    if (!gameState.son.trainingMastery || typeof gameState.son.trainingMastery !== 'object') {
+        gameState.son.trainingMastery = { strength: 0, magic: 0, archery: 0 };
+    }
+    const tm = gameState.son.trainingMastery;
+    if (!Number.isFinite(tm.strength)) tm.strength = 0;
+    if (!Number.isFinite(tm.magic)) tm.magic = 0;
+    if (!Number.isFinite(tm.archery)) tm.archery = 0;
+}
+
+function getFurnitureModel(slot) {
+    ensureFurnitureState();
+    const id = gameState.parent.furniture.equipped[slot];
+    const list = furnitureModels[slot] || [];
+    return list.find(m => m.id === id) || list[0] || { id: `${slot}_basic`, name: '기본', desc: '', cost: 0 };
+}
+
+// ============================================================
+// Next adventure buff (from bed/table/desk special effects)
+// ============================================================
+function normalizeNextAdventureBuff(buff) {
+    if (!buff) return null;
+    return {
+        id: buff.id || 'buff',
+        name: buff.name || '따뜻한 기운',
+        desc: buff.desc || '',
+        expMul: Number.isFinite(buff.expMul) ? buff.expMul : 1.0,
+        goldMul: Number.isFinite(buff.goldMul) ? buff.goldMul : 1.0,
+        lootMul: Number.isFinite(buff.lootMul) ? buff.lootMul : 1.0,
+        riskMul: Number.isFinite(buff.riskMul) ? buff.riskMul : 1.0,
+        fatigueAdd: Number.isFinite(buff.fatigueAdd) ? buff.fatigueAdd : 0.0,
+        source: buff.source || 'home'
+    };
+}
+
+function describeNextAdventureBuff(buff) {
+    if (!buff) return '';
+    const parts = [];
+    if (buff.expMul && Math.abs(buff.expMul - 1) > 0.001) parts.push(`EXP x${buff.expMul.toFixed(2)}`);
+    if (buff.goldMul && Math.abs(buff.goldMul - 1) > 0.001) parts.push(`골드 x${buff.goldMul.toFixed(2)}`);
+    if (buff.lootMul && Math.abs(buff.lootMul - 1) > 0.001) parts.push(`전리품 x${buff.lootMul.toFixed(2)}`);
+    if (buff.riskMul && Math.abs(buff.riskMul - 1) > 0.001) parts.push(`부상위험 x${buff.riskMul.toFixed(2)}`);
+    if (buff.fatigueAdd && Math.abs(buff.fatigueAdd) > 0.0001) parts.push(`피로완화 +${Math.round(buff.fatigueAdd * 100)}%`);
+    const detail = parts.join(' · ');
+    return detail ? `${buff.name} (${detail})` : buff.name;
+}
+
+function setNextAdventureBuff(buff) {
+    const b = normalizeNextAdventureBuff(buff);
+    const prev = gameState.son.nextAdventureBuff;
+    gameState.son.nextAdventureBuff = b;
+    if (b) {
+        if (prev) showToast("✨ 다음 모험 버프가 갱신되었습니다.", 'info');
+        showToast(`✨ ${describeNextAdventureBuff(b)}`, 'info');
+    }
+    updateUI();
+}
+
+function clearNextAdventureBuff() {
+    gameState.son.nextAdventureBuff = null;
+    updateUI();
+}
+
+function maybeProcFromBedAfterSleep() {
+    const m = getFurnitureModel('bed');
+    const roll = Math.random();
+    if (m.id === 'bed_wool') {
+        if (roll < 0.35) setNextAdventureBuff({ id: 'cozy_blanket', name: '포근한 이불', desc: '다음 모험 골드가 늘어납니다.', goldMul: 1.08, source: 'bed' });
+    } else if (m.id === 'bed_canopy') {
+        if (roll < 0.50) setNextAdventureBuff({ id: 'good_dream', name: '좋은 꿈', desc: '다음 모험 EXP가 늘어납니다.', expMul: 1.2, source: 'bed' });
+    } else if (m.id === 'bed_herbal') {
+        if (roll < 0.45) setNextAdventureBuff({ id: 'fresh_morning', name: '상쾌한 아침', desc: '다음 모험 부상 위험이 줄고 덜 지칩니다.', riskMul: 0.85, fatigueAdd: 0.05, source: 'bed' });
+    } else if (m.id === 'bed_star') {
+        if (roll < 0.55) setNextAdventureBuff({ id: 'starlight', name: '별빛 가호', desc: '다음 모험 전리품과 EXP가 늘어납니다.', lootMul: 1.12, expMul: 1.08, source: 'bed' });
+    }
+}
+
+function maybeProcFromTableAfterMeal() {
+    const m = getFurnitureModel('table');
+    const roll = Math.random();
+    if (m.id === 'table_picnic') {
+        if (roll < 0.30) {
+            gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 2);
+            showToast("🌿 피크닉 식탁: 애정 +2", 'success');
+        }
+    } else if (m.id === 'table_wood') {
+        if (roll < 0.25) {
+            gameState.son.personality.diligence = clampInt(gameState.son.personality.diligence + 1, 0, 100);
+            showToast("🪵 원목 식탁: 성실 +1", 'success');
+        }
+    } else if (m.id === 'table_chef') {
+        if (roll < 0.30) setNextAdventureBuff({ id: 'well_fed', name: '든든한 한 끼', desc: '다음 모험에서 덜 지칩니다.', fatigueAdd: 0.04, source: 'table' });
+    } else if (m.id === 'table_royal') {
+        if (roll < 0.25) {
+            gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 2);
+            gameState.son.affinity.rebellion = Math.max(0, gameState.son.affinity.rebellion - 1);
+            showToast("👑 왕실 식탁: 신뢰 +2 · 반항 -1", 'success');
+        }
+    }
+}
+
+function maybeProcFromDeskAfterStudy() {
+    const m = getFurnitureModel('desk');
+    const roll = Math.random();
+    if (m.id === 'desk_pine') {
+        if (roll < 0.20) {
+            gameState.son.personality.diligence = clampInt(gameState.son.personality.diligence + 1, 0, 100);
+            showToast("🌲 소나무 책상: 성실 +1", 'success');
+        }
+    } else if (m.id === 'desk_lamp') {
+        if (roll < 0.18) {
+            gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 2);
+            showToast("💡 램프 책상: 신뢰 +2", 'success');
+        }
+    } else if (m.id === 'desk_scholar') {
+        if (roll < 0.15) {
+            gameState.son.personality.diligence = clampInt(gameState.son.personality.diligence + 1, 0, 100);
+            gameState.son.personality.bravery = clampInt(gameState.son.personality.bravery - 1, 0, 100);
+            showToast("📜 학자 책상: 성실 +1 · 신중 +1", 'success');
+        }
+    } else if (m.id === 'desk_arcane') {
+        if (roll < 0.12) setNextAdventureBuff({ id: 'spark', name: '번뜩임', desc: '다음 모험 EXP가 늘고 부상 위험이 조금 줄어듭니다.', expMul: 1.12, riskMul: 0.92, source: 'desk' });
+    }
+}
+
+function isFurnitureOwned(modelId) {
+    ensureFurnitureState();
+    return !!gameState.parent.furniture.owned[modelId];
+}
+
+function buyFurnitureModel(slot, modelId) {
+    ensureFurnitureState();
+    const list = furnitureModels[slot] || [];
+    const m = list.find(x => x.id === modelId);
+    if (!m) return;
+    if (isFurnitureOwned(modelId)) {
+        showToast("이미 보유한 모델입니다.", 'info');
+        return;
+    }
+    const cost = Math.max(0, Math.floor(m.cost || 0));
+    if (gameState.parent.gold < cost) {
+        showToast(`골드 부족! (필요: ${cost}G)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= cost;
+    gameState.parent.furniture.owned[modelId] = true;
+    showToast(`🏠 ${m.name} 구매 완료! (집에서 교체 가능)`, 'success');
+    updateUI();
+}
+window.buyFurnitureModel = buyFurnitureModel;
+
+let currentSwapSlot = null;
+function openFurnitureSwap(slot) {
+    if (!slot) return;
+    ensureFurnitureState();
+    currentSwapSlot = slot;
+    if (els.furnModalTitle) els.furnModalTitle.innerText = `🏠 ${slot === 'bed' ? '침대' : slot === 'table' ? '식탁' : slot === 'desk' ? '책상' : '훈련장'} 교체`;
+    if (els.furnModalSub) {
+        const note = (gameState.son.state === 'ADVENTURING')
+            ? '지금 미리 바꿔두면, 아들이 돌아온 뒤 사용할 때부터 적용돼요.'
+            : '보유한 모델을 골라 설치하세요.';
+        els.furnModalSub.innerText = `${note} 강화는 슬롯 강화라 교체해도 유지됩니다.`;
+    }
+    if (els.furnModal) els.furnModal.style.display = 'flex';
+    updateFurnitureSwapList();
+}
+window.openFurnitureSwap = openFurnitureSwap;
+
+function closeFurnitureSwap() {
+    if (els.furnModal) els.furnModal.style.display = 'none';
+    currentSwapSlot = null;
+}
+window.closeFurnitureSwap = closeFurnitureSwap;
+
+if (els.furnModal) {
+    els.furnModal.addEventListener('click', (e) => {
+        if (e.target === els.furnModal) closeFurnitureSwap();
+    });
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (els.furnModal && els.furnModal.style.display === 'flex') closeFurnitureSwap();
+});
+
+function equipFurnitureModel(slot, modelId) {
+    ensureFurnitureState();
+    if (!isFurnitureOwned(modelId)) {
+        showToast("먼저 마을에서 구매해야 해요.", 'warning');
+        return;
+    }
+    gameState.parent.furniture.equipped[slot] = modelId;
+    const m = (furnitureModels[slot] || []).find(x => x.id === modelId);
+    showToast(`🏠 ${m?.name || '가구'}로 교체했습니다.`, 'info');
+    updateUI();
+    updateFurnitureSwapList();
+}
+window.equipFurnitureModel = equipFurnitureModel;
+
+function updateFurnitureSwapList() {
+    if (!els.furnModalList || !currentSwapSlot) return;
+    ensureFurnitureState();
+    const slot = currentSwapSlot;
+    const equippedId = gameState.parent.furniture.equipped[slot];
+    const list = furnitureModels[slot] || [];
+    const lv = gameState.parent.upgrades?.[slot] || 1;
+    const eff = getUpgradeEffectLabel(slot, getUpgradeEffectValue(slot, lv));
+    let html = `<div style="margin-bottom:10px; font-size:0.8rem; color:#64748b; font-weight:900;">현재 강화 Lv.${lv} · ${eff}</div>`;
+    html += `<div class="furn-shop-grid">`;
+    for (const m of list) {
+        const owned = isFurnitureOwned(m.id);
+        const equipped = m.id === equippedId;
+        html += `
+	          <div class="furn-row ${owned ? '' : 'locked'}">
+	            <div style="flex:1;">
+	              <div class="furn-row-title">${m.name}</div>
+	              <div class="furn-row-desc">${m.desc}</div>
+	              ${m.effect ? `<div class="furn-row-effect">✨ ${m.effect}</div>` : ''}
+	              <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+	                <span class="furn-chip ${owned ? 'owned' : ''}">${owned ? '보유' : `미보유 · ${m.cost}G`}</span>
+	                ${equipped ? `<span class="furn-chip equipped">설치중</span>` : ''}
+	              </div>
+	            </div>
+	            <button class="furn-btn secondary" ${owned && !equipped ? '' : 'disabled'} onclick="equipFurnitureModel('${slot}', '${m.id}')">${equipped ? '설치중' : owned ? '설치' : '구매 필요'}</button>
+	          </div>
+	        `;
+    }
+    html += `</div>`;
+    els.furnModalList.innerHTML = html;
+}
+
+function renderFurnitureShop() {
+    if (!els.furnShop) return;
+    ensureFurnitureState();
+    if (els.furnShop.dataset.ready === '1') return;
+    const slots = [
+        { key: 'bed', title: '🛏️ 침대' },
+        { key: 'table', title: '🍽️ 식탁' },
+        { key: 'desk', title: '📚 책상' },
+        { key: 'dummy', title: '🤺 훈련장' }
+    ];
+    let html = '';
+    for (const s of slots) {
+        html += `<div class="hint-card" style="margin-top:10px;"><b>${s.title}</b><div style="margin-top:8px;" class="furn-shop-grid">`;
+        for (const m of (furnitureModels[s.key] || [])) {
+            html += `
+	              <div class="furn-row" id="furn-row-${s.key}-${m.id}">
+	                <div style="flex:1;">
+	                  <div class="furn-row-title">${m.name}</div>
+	                  <div class="furn-row-desc">${m.desc}</div>
+	                  ${m.effect ? `<div class="furn-row-effect">✨ ${m.effect}</div>` : ''}
+	                  <div style="margin-top:6px;"><span class="furn-chip" id="furn-chip-${s.key}-${m.id}">-</span></div>
+	                </div>
+	                <button class="furn-btn" id="furn-buy-${s.key}-${m.id}" onclick="buyFurnitureModel('${s.key}','${m.id}')">구매</button>
+	              </div>
+	            `;
+        }
+        html += `</div></div>`;
+    }
+    els.furnShop.innerHTML = html;
+    els.furnShop.dataset.ready = '1';
+    updateFurnitureShopUI();
+}
+
+function updateFurnitureShopUI() {
+    if (!els.furnShop) return;
+    ensureFurnitureState();
+    const slots = ['bed', 'table', 'desk', 'dummy'];
+    for (const slot of slots) {
+        const equippedId = gameState.parent.furniture.equipped[slot];
+        for (const m of (furnitureModels[slot] || [])) {
+            const row = document.getElementById(`furn-row-${slot}-${m.id}`);
+            const chip = document.getElementById(`furn-chip-${slot}-${m.id}`);
+            const btn = document.getElementById(`furn-buy-${slot}-${m.id}`);
+            if (!chip || !btn) continue;
+            const owned = isFurnitureOwned(m.id);
+            const equipped = m.id === equippedId;
+            if (row) row.classList.toggle('locked', !owned);
+            chip.className = `furn-chip ${owned ? (equipped ? 'equipped' : 'owned') : ''}`.trim();
+            chip.innerText = owned ? (equipped ? '설치중' : '보유중') : `가격 ${m.cost}G`;
+            btn.disabled = owned || m.cost === 0;
+            btn.innerText = owned ? '보유' : '구매';
+        }
+    }
+}
+
 // --- Son Dialogues ---
 const sonDialogues = {
     'SLEEPING': ["zzZ...", "음냐음냐...", "5분만 더..."],
     'EATING': ["냠냠!", "맛있다~", "엄마 요리 최고!"],
     'TRAINING': ["하앗!", "이얍!", "더 강해져야 해!"],
     'STUDYING': ["음... 이건 뭐지?", "머리가 아파...", "아 재밌다!"],
+    'RESTING': ["잠깐 쉬는 중...", "후우~", "조금만 있다가 할게요."],
     'IDLE': ["심심해~", "뭐 할 거 없나...", "엄마 뭐해?", "모험 가고 싶다!"],
     'ADVENTURING': ["모험 중!", "몬스터다!", "앞으로!"]
 };
@@ -203,8 +1606,1309 @@ const adventureScenes = [
 ];
 
 // ============================================================
+// Adventure difficulty (son decides by personality)
+// ============================================================
+const difficultyData = {
+    safe: { name: '🟢 안전', duration: [240, 330], goldMul: 0.9, lootMul: 0.9, expMul: 0.95, fatigueFloor: 0.25, contactChance: 0.45, maverickChance: 0.03 },
+    normal: { name: '🟡 보통', duration: [210, 300], goldMul: 1.0, lootMul: 1.0, expMul: 1.0, fatigueFloor: 0.2, contactChance: 0.7, maverickChance: 0.05 },
+    risky: { name: '🔴 무리', duration: [180, 270], goldMul: 1.18, lootMul: 1.12, expMul: 1.1, fatigueFloor: 0.18, contactChance: 0.85, maverickChance: 0.09 }
+};
+
+function getAdventureDifficultyDecision() {
+    ensureSonGrowthState();
+    const p = gameState.son.personality || {};
+    const a = gameState.son.affinity || {};
+    const bravery = Number.isFinite(p.bravery) ? p.bravery : 50;
+    const diligence = Number.isFinite(p.diligence) ? p.diligence : 50;
+    const calmness = Number.isFinite(p.calmness) ? p.calmness : 50;
+    const rebellion = Number.isFinite(a.rebellion) ? a.rebellion : 0;
+    const injured = !!gameState.son.injury;
+
+    // -1 (very safe) ~ +1 (very risky)
+    let riskScore = 0;
+    riskScore += (bravery - 50) / 50 * 0.85;          // 대담할수록 무리
+    riskScore += (50 - diligence) / 50 * 0.55;        // 즉흥할수록 무리
+    riskScore += (rebellion - 50) / 50 * 0.25;        // 반항이 높으면 더 밀어붙임
+    riskScore -= (calmness - 50) / 50 * 0.35;         // 차분하면 안전
+    if (injured) riskScore -= 0.9;                    // 부상이 있으면 보수적으로
+
+    const reasons = [];
+    if (injured) reasons.push("부상이 있어서 안전하게 가려 해요.");
+    if (bravery >= 62) reasons.push("대담해서 더 어려운 곳도 노려요.");
+    if (bravery <= 38) reasons.push("신중해서 안전을 선호해요.");
+    if (diligence <= 40) reasons.push("즉흥적인 편이라 무리할 수도 있어요.");
+    if (calmness >= 62) reasons.push("차분해서 리스크를 줄이려 해요.");
+    if (rebellion >= 70) reasons.push("고집이 세져서 위험한 선택을 할 때도 있어요.");
+
+    let diffKey = 'normal';
+    if (riskScore >= 0.55) diffKey = 'risky';
+    else if (riskScore <= -0.35) diffKey = 'safe';
+    return { diffKey, riskScore, reasons: reasons.slice(0, 3) };
+}
+
+function decideAdventureDifficulty() {
+    return getAdventureDifficultyDecision().diffKey;
+}
+
+// ============================================================
+// Zones & Missions (RPG adventure structure)
+// ============================================================
+const zones = [
+    { id: 'meadow', name: '햇살 초원', emoji: '🌼', recCP: 25, baseGold: 60, injuryRisk: 0.05, drops: [{ key: 'herb', prob: 35, min: 1, max: 2 }, { key: 'seed', prob: 22, min: 1, max: 2 }, { key: 'leather', prob: 18, min: 1, max: 2 }] },
+    { id: 'forest', name: '속삭이는 숲', emoji: '🌲', recCP: 55, baseGold: 90, injuryRisk: 0.10, drops: [{ key: 'monster_bone', prob: 30, min: 1, max: 2 }, { key: 'wolf_fang', prob: 18, min: 1, max: 1 }, { key: 'seed', prob: 16, min: 1, max: 2 }, { key: 'leather', prob: 30, min: 1, max: 2 }] },
+    { id: 'ruins', name: '부서진 유적', emoji: '🏛️', recCP: 110, baseGold: 140, injuryRisk: 0.14, drops: [{ key: 'magic_crystal', prob: 20, min: 1, max: 1 }, { key: 'relic_fragment', prob: 18, min: 1, max: 2 }, { key: 'monster_bone', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 26, min: 1, max: 2 }] },
+    { id: 'mountain', name: '바람 산맥', emoji: '🏔️', recCP: 210, baseGold: 220, injuryRisk: 0.18, drops: [{ key: 'rare_hide', prob: 22, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 14, min: 1, max: 1 }, { key: 'magic_crystal', prob: 16, min: 1, max: 1 }, { key: 'steel', prob: 18, min: 1, max: 2 }] },
+    { id: 'dragon_lair', name: '드래곤 둥지', emoji: '🐉', recCP: 380, baseGold: 380, injuryRisk: 0.26, drops: [{ key: 'dragon_heart', prob: 8, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 22, min: 1, max: 2 }] }
+];
+
+const missions = [
+    { id: 'gather', name: '재료 수집', emoji: '🧺', rewardMul: 0.9, expMul: 0.9, riskMul: 0.8 },
+    { id: 'hunt', name: '정예 처치', emoji: '🎯', rewardMul: 1.05, expMul: 1.05, riskMul: 1.1 },
+    { id: 'boss', name: '보스 도전', emoji: '👑', rewardMul: 1.25, expMul: 1.15, riskMul: 1.35 }
+];
+
+function getZoneById(id) {
+    return zones.find(z => z.id === id) || zones[0];
+}
+function getMissionById(id) {
+    return missions.find(m => m.id === id) || missions[0];
+}
+
+const zoneBosses = {
+    meadow: { emoji: '🐗', name: '풀숲의 멧돼지 왕' },
+    forest: { emoji: '🧌', name: '숲의 고블린 대장' },
+    ruins: { emoji: '🗿', name: '유적의 수호자' },
+    mountain: { emoji: '🦅', name: '바람의 그리핀' },
+    dragon_lair: { emoji: '🐉', name: '고룡 아우르네스' }
+};
+
+function ensureWorldCodexState() {
+    if (!gameState.parent.worldCodex || typeof gameState.parent.worldCodex !== 'object') {
+        gameState.parent.worldCodex = { zones: {} };
+    }
+    if (!gameState.parent.worldCodex.zones || typeof gameState.parent.worldCodex.zones !== 'object') {
+        gameState.parent.worldCodex.zones = {};
+    }
+    const zmap = gameState.parent.worldCodex.zones;
+    for (const z of zones) {
+        if (!zmap[z.id] || typeof zmap[z.id] !== 'object') {
+            zmap[z.id] = {
+                discovered: false,
+                intel: 0, // 0~100
+                visits: 0,
+                bestOutcome: null,
+                bestPartialPct: 0,
+                bossDefeated: false,
+                bossKills: 0,
+                last: null // { missionId, outcome, pct, tick }
+            };
+        }
+        const e = zmap[z.id];
+        e.discovered = !!e.discovered;
+        e.intel = Math.max(0, Math.min(100, Math.floor(e.intel || 0)));
+        e.visits = Math.max(0, Math.floor(e.visits || 0));
+        if (typeof e.bestOutcome !== 'string') e.bestOutcome = null;
+        e.bestPartialPct = Math.max(0, Math.min(99, Math.floor(e.bestPartialPct || 0)));
+        e.bossDefeated = !!e.bossDefeated;
+        e.bossKills = Math.max(0, Math.floor(e.bossKills || 0));
+        if (e.last && typeof e.last !== 'object') e.last = null;
+    }
+}
+
+function outcomeRank(outcome) {
+    const r = { fail: 0, partial: 1, success: 2, great: 3 };
+    return r[outcome] ?? 0;
+}
+
+function outcomeLabel(outcome, pct) {
+    if (outcome === 'great') return '대성공';
+    if (outcome === 'success') return '성공';
+    if (outcome === 'partial') return `부분 성공 (${Math.min(99, Math.max(0, Math.floor(pct || 0)))}%)`;
+    return '실패(부분 보상)';
+}
+
+function recordWorldRun(zoneId, missionId, outcome, scoreRatio) {
+    ensureWorldCodexState();
+    const entry = gameState.parent.worldCodex.zones[zoneId];
+    if (!entry) return { firstDiscovery: false, firstBoss: false };
+
+    const beforeDiscovery = !!entry.discovered;
+    const beforeBoss = !!entry.bossDefeated;
+
+    entry.discovered = true;
+    entry.visits += 1;
+
+    const pct = Math.max(0, Math.min(150, Math.round((scoreRatio || 0) * 100)));
+    const intelGain =
+        outcome === 'great' ? 18 :
+            outcome === 'success' ? 15 :
+                outcome === 'partial' ? 10 :
+                    5;
+    const missionBonus = missionId === 'boss' ? 10 : missionId === 'hunt' ? 4 : 0;
+    entry.intel = Math.min(100, entry.intel + intelGain + missionBonus);
+
+    if (!entry.bestOutcome || outcomeRank(outcome) > outcomeRank(entry.bestOutcome)) {
+        entry.bestOutcome = outcome;
+    }
+    if (outcome === 'partial') {
+        entry.bestPartialPct = Math.max(entry.bestPartialPct || 0, Math.min(99, pct));
+    }
+
+    if (missionId === 'boss' && (outcome === 'success' || outcome === 'great')) {
+        entry.bossDefeated = true;
+        entry.bossKills += 1;
+    }
+
+    entry.last = { missionId, outcome, pct: Math.min(99, pct), tick: Math.floor(gameState.worldTick || 0) };
+    return { firstDiscovery: !beforeDiscovery, firstBoss: !beforeBoss && entry.bossDefeated };
+}
+
+function getDropDisplayName(key) {
+    if (key === 'seed') return '🌱 씨앗';
+    ensureLootKey(key);
+    return gameState.parent.loot[key]?.name || key;
+}
+
+function renderWorldCodexUI(currentGoalZoneId) {
+    const root = document.getElementById('world-codex-list');
+    if (!root) return;
+    ensureWorldCodexState();
+
+    const zmap = gameState.parent.worldCodex.zones;
+    let html = '';
+    for (const z of zones) {
+        const e = zmap[z.id];
+        const intel = e?.intel || 0;
+        const highlight = (currentGoalZoneId && z.id === currentGoalZoneId);
+        const boss = zoneBosses[z.id];
+        const bossName =
+            e?.bossDefeated
+                ? `${boss?.emoji || '👑'} ${boss?.name || '보스'}`
+                : `${boss?.emoji || '👑'} 소문: ${boss?.name || '이름 없는 보스'}`;
+        const best = e?.bestOutcome ? (e.bestOutcome === 'partial' ? `부분 ${e.bestPartialPct || 0}%` : outcomeLabel(e.bestOutcome)) : '-';
+        const last = e?.last ? (e.last.outcome === 'partial' ? `부분 ${e.last.pct}%` : outcomeLabel(e.last.outcome)) : '-';
+        const recLine = intel >= 10 ? `권장CP ${z.recCP} · 부상위험 ${Math.round(z.injuryRisk * 100)}%` : '아직 정보가 부족해요.';
+        const dropsLine = intel >= 30 && z.drops?.length
+            ? `주요 전리품: ${z.drops.slice(0, 3).map(d => getDropDisplayName(d.key)).join(', ')}`
+            : '전리품 정보: ???';
+
+        html += `
+          <div class="hint-card" style="margin-top:10px; border:${highlight ? '2px solid #0f172a' : '1px solid #e2e8f0'};">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+              <div style="min-width:0;">
+                <div style="font-weight:1000; color:#0f172a;">${z.emoji} ${z.name} ${highlight ? '<span style=\"color:#0f172a; font-weight:1000;\">(목표)</span>' : ''}</div>
+                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">탐험도 <b>${intel}%</b> · 방문 <b>${e?.visits || 0}</b>회 · 최고 <b>${best}</b> · 마지막 <b>${last}</b></div>
+                <div style="margin-top:6px; font-size:0.78rem; color:#475569;">${recLine}</div>
+                <div style="margin-top:4px; font-size:0.78rem; color:#475569;">${dropsLine}</div>
+                <div style="margin-top:6px; font-size:0.78rem; color:${e?.bossDefeated ? '#f59e0b' : '#64748b'}; font-weight:900;">${bossName}${e?.bossDefeated ? ` · 격파 ${e.bossKills || 1}회` : ''}</div>
+              </div>
+            </div>
+          </div>
+        `;
+    }
+    root.innerHTML = html;
+}
+
+function ensureLootKey(key) {
+    if (!gameState.parent.loot[key]) {
+        const nameMap = {
+            wolf_fang: '🐺 늑대 송곳니',
+            relic_fragment: '🧩 유물 파편',
+            wyvern_scale: '🪶 와이번 비늘',
+            dragon_heart: '❤️‍🔥 드래곤의 심장',
+            leather: '🧵 가죽',
+            steel: '🪨 강철',
+            iron_scrap: '🧩 철 조각',
+            arcane_dust: '✨ 마력 가루'
+        };
+        gameState.parent.loot[key] = { name: nameMap[key] || key, count: 0 };
+    }
+}
+
+function parseTierFromGearId(id) {
+    if (!id || typeof id !== 'string') return 0;
+    const m = /_t(\d+)/.exec(id);
+    if (!m) return 0;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function getHighestOwnedGearTier(slot) {
+    const inv = gameState.parent.gearInventory?.[slot] || {};
+    let best = 0;
+    for (const [id, item] of Object.entries(inv)) {
+        if (!item || (item.count || 0) <= 0) continue;
+        best = Math.max(best, parseTierFromGearId(id));
+    }
+    return best;
+}
+
+function getEquippedGearTier(slot) {
+    const id = gameState.son.equipment?.[slot]?.id;
+    return parseTierFromGearId(id);
+}
+
+function getNextGearCraftStep(slot) {
+    if (!craftConfig?.slots?.includes(slot)) return null;
+    const ownedTier = getHighestOwnedGearTier(slot);
+    const equippedTier = getEquippedGearTier(slot);
+    const cur = Math.max(ownedTier, equippedTier);
+    if (cur >= craftConfig.tierCount) return null;
+    const next = cur <= 0 ? 1 : Math.min(craftConfig.tierCount, cur + 1);
+    const recipe = buildGearRecipe(slot, next);
+    return { slot, tier: next, recipe, curTier: cur, ownedTier, equippedTier };
+}
+
+function describePlanReasons(plan) {
+    if (!plan) return '';
+    const reasons = [];
+    const d = plan.diffDecision;
+    if (d?.reasons?.length) reasons.push(...d.reasons);
+
+    const bravery = gameState.son.personality?.bravery ?? 50;
+    const diligence = gameState.son.personality?.diligence ?? 50;
+    if (plan.mission?.id === 'boss') {
+        if (bravery >= 60) reasons.push("대담해서 보스에 끌려요.");
+        if (diligence <= 45) reasons.push("즉흥이 있어 ‘한 번 가보자!’가 나오기도 해요.");
+    } else if (plan.mission?.id === 'gather') {
+        if (bravery <= 45) reasons.push("신중해서 안정적인 수집을 택했어요.");
+        if (diligence >= 60) reasons.push("성실해서 ‘꾸준히’ 쌓는 걸 좋아해요.");
+    } else if (plan.mission?.id === 'hunt') {
+        reasons.push("너무 무리하진 않되, 성과를 내고 싶어 해요.");
+    }
+
+    return reasons.slice(0, 4).map(x => `- ${x}`).join('<br>');
+}
+
+function getLongTermGoalsMeta() {
+    ensureWorldCodexState();
+    const zmap = gameState.parent.worldCodex?.zones || {};
+    const total = zones.length;
+    const killed = zones.reduce((acc, z) => acc + (zmap[z.id]?.bossDefeated ? 1 : 0), 0);
+    return `${killed}/${total} 보스 격파`;
+}
+
+function renderLongTermGoals(planZoneId) {
+    ensureWorldCodexState();
+    const zmap = gameState.parent.worldCodex?.zones || {};
+    const remaining = zones.filter(z => !(zmap[z.id]?.bossDefeated));
+    const top = remaining.slice(0, 3);
+    if (top.length === 0) {
+        return `<div style="font-size:0.8rem; color:#10b981; font-weight:1000;">✅ 모든 보스를 격파했습니다!</div>`;
+    }
+    return top.map(z => {
+        const e = zmap[z.id];
+        const intel = e?.intel || 0;
+        const boss = zoneBosses[z.id];
+        const highlight = planZoneId && z.id === planZoneId;
+        const label = e ? `${intel}%` : '???';
+        const bossLabel = e?.bossDefeated ? '격파 완료' : (e ? '도전 가능' : '소문만');
+        return `
+          <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:12px; background:${highlight ? '#0b1220' : '#ffffff'}; color:${highlight ? '#ffffff' : '#0f172a'};">
+            <div style="min-width:0; font-weight:1000;">${z.emoji} ${z.name}</div>
+            <div style="flex:0 0 auto; font-size:0.78rem; color:${highlight ? '#cbd5e1' : '#64748b'}; font-weight:900;">탐험 ${label} · ${boss?.emoji || '👑'} ${bossLabel}</div>
+          </div>
+        `;
+    }).join('');
+}
+
+function isSupportPinDone(pin) {
+    if (!pin || typeof pin !== 'object') return false;
+    if (pin.type === 'treat') return !gameState.son.injury;
+    if (pin.type === 'craftGear') {
+        const slot = pin.slot;
+        const tier = Math.max(1, Math.min(10, Math.floor(pin.tier || 1)));
+        const id = `${slot}_t${tier}`;
+        const inv = gameState.parent.gearInventory?.[slot] || {};
+        const owned = (inv[id]?.count || 0) > 0;
+        const equipped = gameState.son.equipment?.[slot]?.id === id;
+        return owned || equipped;
+    }
+    if (pin.type === 'craftMilestone') {
+        const w = gameState.parent.specialWeaponInventory?.[pin.weaponId];
+        const owned = (w?.count || 0) > 0;
+        const equipped = gameState.son.equipment?.weapon?.id === pin.weaponId;
+        return owned || equipped;
+    }
+    if (pin.type === 'cook') {
+        ensureKitchenState();
+        const cooking = gameState.parent.kitchen?.cooking;
+        if (cooking?.recipeId === pin.recipeId) return false;
+        const inv = gameState.parent.inventory?.[pin.recipeId];
+        if ((inv?.count || 0) > 0) return true;
+        const placed = gameState.rooms?.['room-table']?.placedItem;
+        return placed === pin.recipeId;
+    }
+    if (pin.type === 'bookshelf') {
+        ensureLibraryState();
+        const shelf = gameState.parent.library?.shelf || [];
+        return shelf.some(Boolean);
+    }
+    if (pin.type === 'buySandbag') {
+        const inv = gameState.parent.inventory?.sandbag;
+        return (inv?.count || 0) > 0;
+    }
+    return false;
+}
+
+function renderSupportPinUI(plan) {
+    const root = document.getElementById('support-pin');
+    if (!root) return;
+    ensureSupportPinState();
+    const pin = gameState.parent.supportPin;
+    if (!pin) {
+        root.innerHTML = `<div style="font-size:0.78rem; color:#64748b;">아직 핀한 서포트가 없어요.</div>`;
+        return;
+    }
+
+    const done = isSupportPinDone(pin);
+    let title = '📌 핀';
+    let sub = '';
+    if (pin.type === 'treat') {
+        const cost = gameState.son.injury?.hospitalCost || 0;
+        title = `🏥 치료하기`;
+        sub = gameState.son.injury ? `부상: ${gameState.son.injury.label || '부상'} · 비용 ${cost}G` : `부상이 없어요.`;
+    } else if (pin.type === 'craftGear') {
+        const step = buildGearRecipe(pin.slot, Math.max(1, Math.min(10, Math.floor(pin.tier || 1))));
+        title = `🧵 제작: ${step.name}`;
+        let extra = '';
+        if (step.needsGear) {
+            const equippedId = gameState.son.equipment?.[pin.slot]?.id;
+            if (equippedId === step.needsGear.id) {
+                extra = `<br><span style="color:#64748b;">※ 이전 장비가 현재 착용중이에요. (옷장에서 잠깐 해제/교체하면 승급 가능)</span>`;
+            }
+        }
+        sub = `${gearNeedText(pin.slot, step.needsGear)}${step.needsGear ? '<br>' : ''}${needsText(step.needs)}${extra}`;
+    } else if (pin.type === 'craftMilestone') {
+        const def = craftConfig.milestoneWeapons.find(m => m.id === pin.weaponId);
+        title = `🗡️ 제작: ${def?.name || pin.weaponId}`;
+        sub = def ? needsText(def.needs) : '';
+    } else if (pin.type === 'cook') {
+        const r = recipes.find(x => x.id === pin.recipeId);
+        title = `🍳 요리: ${r?.name || pin.recipeId}`;
+        sub = r ? needsTextFromRecipe(r) : '';
+    } else if (pin.type === 'bookshelf') {
+        title = `📚 책장 배치`;
+        sub = `아들이 마음에 드는 책만 읽을지도 몰라요.`;
+    } else if (pin.type === 'buySandbag') {
+        title = `🏋️ 모래주머니 구매`;
+        sub = `훈련 효율을 올려줘요.`;
+    }
+
+    root.innerHTML = `
+      <div class="support-row pinned ${done ? 'done' : ''}">
+        <div style="flex:1; min-width:0;">
+          <div class="support-title">${done ? '✅ ' : ''}${title}</div>
+          <div class="support-sub">${sub}</div>
+        </div>
+        <div class="support-actions">
+          <button class="mini-btn secondary" type="button" onclick="goToSupportPin()">바로가기</button>
+          <button class="mini-btn" type="button" onclick="clearSupportPin()">해제</button>
+        </div>
+      </div>
+    `;
+}
+
+function renderSupportSuggestionsUI(plan) {
+    const root = document.getElementById('support-suggestions');
+    if (!root) return;
+    ensureSupportPinState();
+
+    const suggestions = [];
+    if (gameState.son.injury) suggestions.push({ type: 'treat' });
+
+    // If struggling: prioritize armor upgrades
+    const score = plan ? (plan.cp / Math.max(1, plan.zone.recCP)) : 1;
+    if (plan && score < 1.0) {
+        const armorStep = getNextGearCraftStep('armor');
+        const helmStep = getNextGearCraftStep('helmet');
+        const bootsStep = getNextGearCraftStep('boots');
+        [armorStep, helmStep, bootsStep].filter(Boolean).slice(0, 2).forEach(s => {
+            suggestions.push({ type: 'craftGear', slot: s.slot, tier: s.tier });
+        });
+    }
+
+    // Boss or risky -> survivability meal
+    if (plan && (plan.mission?.id === 'boss' || plan.diffKey === 'risky')) {
+        suggestions.push({ type: 'cook', recipeId: 'herb_potion' });
+    }
+
+    // If bookshelf empty -> suggest placing/buying books
+    ensureLibraryState();
+    const shelfHasAny = (gameState.parent.library?.shelf || []).some(Boolean);
+    if (!shelfHasAny) suggestions.push({ type: 'bookshelf' });
+
+    // Training tool suggestion (if none)
+    const sandbagCount = gameState.parent.inventory?.sandbag?.count || 0;
+    if (sandbagCount <= 0) suggestions.push({ type: 'buySandbag' });
+
+    const uniq = [];
+    const keyOf = (s) => `${s.type}:${s.slot || ''}:${s.tier || ''}:${s.recipeId || ''}:${s.weaponId || ''}`;
+    const seen = new Set();
+    for (const s of suggestions) {
+        const k = keyOf(s);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        uniq.push(s);
+        if (uniq.length >= 4) break;
+    }
+
+    if (uniq.length === 0) {
+        root.innerHTML = `<div style="font-size:0.78rem; color:#64748b;">지금은 큰 준비 없이도 괜찮아 보여요.</div>`;
+        return;
+    }
+
+    root.innerHTML = uniq.map(s => {
+        let title = '서포트';
+        let sub = '';
+        if (s.type === 'treat') {
+            const cost = gameState.son.injury?.hospitalCost || 0;
+            title = `🏥 치료하기`;
+            sub = `부상 회복 (비용 ${cost}G)`;
+        } else if (s.type === 'craftGear') {
+            const step = buildGearRecipe(s.slot, s.tier);
+            title = `🧵 제작: ${step.name}`;
+            let extra = '';
+            if (step.needsGear) {
+                const equippedId = gameState.son.equipment?.[s.slot]?.id;
+                if (equippedId === step.needsGear.id) {
+                    extra = `<br><span style="color:#64748b;">※ 이전 장비가 착용중이에요.</span>`;
+                }
+            }
+            sub = `${needsText(step.needs)}${step.needsGear ? `<br>${gearNeedText(s.slot, step.needsGear)}` : ''}${extra}`;
+        } else if (s.type === 'cook') {
+            const r = recipes.find(x => x.id === s.recipeId);
+            title = `🍳 요리: ${r?.name || s.recipeId}`;
+            sub = r ? needsTextFromRecipe(r) : '';
+        } else if (s.type === 'bookshelf') {
+            title = `📚 책장 준비`;
+            sub = `서점에서 책을 사고, 책장에 배치해요.`;
+        } else if (s.type === 'buySandbag') {
+            title = `🏋️ 모래주머니`;
+            sub = `잡화점에서 구매 → 훈련장에 배치하면 효율이 올라요.`;
+        }
+        const task = JSON.stringify(s).replace(/"/g, '&quot;');
+        return `
+          <div class="support-row">
+            <div style="flex:1; min-width:0;">
+              <div class="support-title">${title}</div>
+              <div class="support-sub">${sub}</div>
+            </div>
+            <div class="support-actions">
+              <button class="mini-btn" type="button" onclick="pinSupportTask(${task})">📌 핀</button>
+            </div>
+          </div>
+        `;
+    }).join('');
+}
+
+function planAdventureGoal(options = {}) {
+    const { refresh = false } = options;
+    const cp = getSonCombatPower();
+    const job = getAdventureJobPerks();
+    const bravery = gameState.son.personality.bravery;
+    const diligence = gameState.son.personality.diligence;
+    const diffDecision = getAdventureDifficultyDecision();
+    const diffKey = diffDecision.diffKey;
+    const diff = difficultyData[diffKey] || difficultyData.normal;
+
+    if (!refresh && gameState.son.plannedGoal && gameState.son.plannedGoal.diffKey === diffKey) {
+        const cached = gameState.son.plannedGoal;
+        const cpDrift = Math.abs((cached.cp || cp) - cp);
+        if (cpDrift <= 12) {
+            return { zone: getZoneById(cached.zoneId), mission: getMissionById(cached.missionId), diffKey, diff, cp, diffDecision };
+        }
+    }
+
+    const braveryFactor = (bravery - 50) / 50; // -1..1
+    const desiredRec = cp * (1 + braveryFactor * 0.45) * (job.planRecMul || 1.0);
+
+    // Difficulty acts as a soft cap: safe -> avoid overshoot, risky -> allow more overshoot
+    const overshootCap = diffKey === 'safe' ? 1.15 : diffKey === 'risky' ? 1.55 : 1.30;
+    const maxRec = cp * overshootCap;
+
+    let chosen = zones[0];
+    let bestScore = -99999;
+    for (const z of zones) {
+        const capPenalty = z.recCP > maxRec ? -9999 : 0;
+        const closeness = -Math.abs(z.recCP - desiredRec) / Math.max(1, cp);
+        const progression = Math.min(1, z.recCP / Math.max(1, cp));
+        const braveBonus = bravery >= 60 ? progression * 0.08 : 0;
+        const safeBonus = bravery <= 40 ? (z.recCP <= cp ? 0.06 : -0.12) : 0;
+        const score = capPenalty + closeness + braveBonus + safeBonus;
+        if (score > bestScore) { bestScore = score; chosen = z; }
+    }
+
+    // Mission choice: brave+impulsive => boss/hunt more often, cautious/diligent => gather
+    const impulsive = clamp01((50 - diligence) / 50);
+    const cautious = clamp01((50 - bravery) / 50);
+    let wGather = 0.45 + cautious * 0.35 + (diligence >= 60 ? 0.08 : 0) - impulsive * 0.12;
+    let wHunt = 0.35 + clamp01((bravery - 50) / 50) * 0.25;
+    let wBoss = 0.20 + clamp01((bravery - 50) / 50) * 0.35 + impulsive * 0.18;
+    wGather += (job.wGatherAdd || 0);
+    wHunt += (job.wHuntAdd || 0);
+    wBoss += (job.wBossAdd || 0);
+    wGather = Math.max(0.05, wGather);
+    wHunt = Math.max(0.05, wHunt);
+    wBoss = Math.max(0.05, wBoss);
+    const total = Math.max(0.01, wGather + wHunt + wBoss);
+    const r = Math.random() * total;
+    const mission = r < wGather ? getMissionById('gather') : r < wGather + wHunt ? getMissionById('hunt') : getMissionById('boss');
+
+    gameState.son.plannedGoal = { zoneId: chosen.id, missionId: mission.id, diffKey, cp };
+    return { zone: chosen, mission, diffKey, diff, cp, diffDecision };
+}
+
+// ============================================================
+// Pixel Art (optional assets with emoji fallback)
+// ============================================================
+const pixelArt = {
+    srcStatus: new Map(), // src -> 'pending' | 'loaded' | 'failed'
+    sonSrcByState: {
+        'IDLE': 'assets/pixel/son_idle.png',
+        'SLEEPING': 'assets/pixel/son_sleeping.png',
+        'EATING': 'assets/pixel/son_eating.png',
+        'TRAINING': 'assets/pixel/son_training.png',
+        'STUDYING': 'assets/pixel/son_studying.png',
+        'RESTING': 'assets/pixel/son_sleeping.png',
+        'ADVENTURING': 'assets/pixel/son_adventuring.png'
+    },
+    preload(src) {
+        if (!src) return;
+        const status = this.srcStatus.get(src);
+        if (status) return;
+        this.srcStatus.set(src, 'pending');
+        const img = new Image();
+        img.onload = () => this.srcStatus.set(src, 'loaded');
+        img.onerror = () => this.srcStatus.set(src, 'failed');
+        img.src = src;
+    },
+    isLoaded(src) { return this.srcStatus.get(src) === 'loaded'; },
+    isFailed(src) { return this.srcStatus.get(src) === 'failed'; }
+};
+
+function initPixelAssets() {
+    // 1) Attach load/error listeners to toggle emoji fallback per object
+    document.querySelectorAll('img[data-pixel]').forEach(img => {
+        const container = img.closest('.son-emoji') || img.closest('.furniture');
+        if (!container) return;
+
+        const markLoaded = () => container.classList.add('pixel-loaded');
+        const markError = () => container.classList.remove('pixel-loaded');
+
+        img.addEventListener('load', markLoaded);
+        img.addEventListener('error', markError);
+        if (img.complete && img.naturalWidth > 0) markLoaded();
+    });
+
+    // 2) Preload son state sprites so swapping doesn't flicker
+    Object.values(pixelArt.sonSrcByState).forEach(src => pixelArt.preload(src));
+}
+
+function updateSonPixelSprite() {
+    const img = document.querySelector('img[data-pixel="son"]');
+    if (!img) return;
+
+    const desired = pixelArt.sonSrcByState[gameState.son.state] || pixelArt.sonSrcByState.IDLE;
+    const fallback = pixelArt.sonSrcByState.IDLE;
+
+    pixelArt.preload(desired);
+    pixelArt.preload(fallback);
+
+    const srcToUse =
+        pixelArt.isLoaded(desired) ? desired :
+        pixelArt.isFailed(desired) && pixelArt.isLoaded(fallback) ? fallback :
+        desired;
+
+    if (img.getAttribute('src') !== srcToUse) {
+        img.setAttribute('src', srcToUse);
+    }
+}
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+function clampInt(v, min, max) { return Math.max(min, Math.min(max, Math.floor(v))); }
+
+function formatMmSs(totalSeconds) {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function etaRangeFromRemaining(remainingSeconds) {
+    const rem = Math.max(0, remainingSeconds);
+    const diligence = gameState.son.personality?.diligence ?? 50;
+    const predict = clamp01(diligence / 100); // 성실할수록 예측 가능
+    const spread = 0.25 - (predict * 0.15); // 0.10~0.25
+    const min = rem * (1 - spread);
+    const max = rem * (1 + spread * 1.4);
+    return { min: Math.max(0, Math.floor(min)), max: Math.max(0, Math.floor(max)) };
+}
+
+function formatLastContact(secondsAgo) {
+    const s = Math.max(0, Math.floor(secondsAgo));
+    if (s < 10) return '방금 전';
+    if (s < 60) return `${s}초 전`;
+    const m = Math.floor(s / 60);
+    return `${m}분 전`;
+}
+
+function getSonAtk() {
+    ensureSonGrowthState();
+    const eq = gameState.son.equipment;
+    const base = (eq.weapon?.atk || 0) + (eq.helmet?.atk || 0) + (eq.armor?.atk || 0) + (eq.boots?.atk || 0);
+    const s = gameState.son.stats;
+    const phys = Number.isFinite(s.physAtk) ? s.physAtk : 0;
+    const accBonus = Number.isFinite(s.accuracy) ? Math.floor(s.accuracy / 25) : 0;
+    return base + phys + accBonus;
+}
+function getSonDef() {
+    ensureSonGrowthState();
+    const eq = gameState.son.equipment;
+    const base = (eq.weapon?.def || 0) + (eq.helmet?.def || 0) + (eq.armor?.def || 0) + (eq.boots?.def || 0);
+    const s = gameState.son.stats;
+    const resBonus = Number.isFinite(s.magicRes) ? Math.floor(s.magicRes * 0.6) : 0;
+    const agiBonus = Number.isFinite(s.agility) ? Math.floor(s.agility / 30) : 0;
+    return base + resBonus + agiBonus;
+}
+function getEquipAtkSum() {
+    const eq = gameState.son.equipment;
+    return (eq.weapon?.atk || 0) + (eq.helmet?.atk || 0) + (eq.armor?.atk || 0) + (eq.boots?.atk || 0);
+}
+function getEquipDefSum() {
+    const eq = gameState.son.equipment;
+    return (eq.weapon?.def || 0) + (eq.helmet?.def || 0) + (eq.armor?.def || 0) + (eq.boots?.def || 0);
+}
+function getConditionMultiplier() {
+    const hpPct = gameState.son.maxHp > 0 ? gameState.son.hp / gameState.son.maxHp : 0;
+    const hungerPct = gameState.son.maxHunger > 0 ? gameState.son.hunger / gameState.son.maxHunger : 0;
+    const avg = clamp01((hpPct + hungerPct) / 2);
+    return 0.85 + (avg * 0.35); // 0.85 ~ 1.2
+}
+function getLevelMultiplier() {
+    return 1 + Math.max(0, gameState.son.level - 1) * 0.08;
+}
+function getSonCombatPower() {
+    ensureSonGrowthState();
+    const atk = getSonAtk();
+    const def = getSonDef();
+    const s = gameState.son.stats;
+    const magicAtk = Number.isFinite(s.magicAtk) ? s.magicAtk : 0;
+    const accuracy = Number.isFinite(s.accuracy) ? s.accuracy : 0;
+    const agility = Number.isFinite(s.agility) ? s.agility : 0;
+    const magicRes = Number.isFinite(s.magicRes) ? s.magicRes : 0;
+    const atkTotal = atk + Math.floor(magicAtk * 0.8) + Math.floor(accuracy * 0.15);
+    const defTotal = def + Math.floor(magicRes * 0.35) + Math.floor(agility * 0.2);
+    const base = (atkTotal + 1) * (1 + defTotal * 0.06) + Math.floor(gameState.son.maxHp / 40);
+    const injuryMul = gameState.son.injury?.cpMul ?? 1.0;
+    return Math.max(1, Math.floor(base * getLevelMultiplier() * getConditionMultiplier() * injuryMul));
+}
+
+function getTrainingTypeFromDummyModel() {
+    const m = getFurnitureModel('dummy');
+    if (m.id === 'dummy_strength') return 'strength';
+    if (m.id === 'dummy_magic') return 'magic';
+    if (m.id === 'dummy_archery') return 'archery';
+    if (m.id === 'dummy_basic') return 'random';
+    if (m.id === 'dummy_legend') return 'legend';
+    return 'random';
+}
+
+function pickLegendTrainingType() {
+    ensureSonGrowthState();
+    const tm = gameState.son.trainingMastery;
+    const entries = [
+        ['strength', tm.strength || 0],
+        ['magic', tm.magic || 0],
+        ['archery', tm.archery || 0]
+    ];
+    entries.sort((a, b) => a[1] - b[1]);
+    const lowest = entries[0][0];
+    const second = entries[1][0];
+    return Math.random() < 0.7 ? lowest : second;
+}
+
+function resolveTrainingType() {
+    const t = getTrainingTypeFromDummyModel();
+    if (t === 'strength' || t === 'magic' || t === 'archery') return t;
+    if (t === 'legend') return pickLegendTrainingType();
+    // random
+    const r = Math.random();
+    return r < 0.34 ? 'strength' : r < 0.67 ? 'magic' : 'archery';
+}
+
+function applyTrainingGrowth(type, toolBonus = false) {
+    ensureSonGrowthState();
+    const s = gameState.son.stats;
+    const p = gameState.son.personality;
+    const tm = gameState.son.trainingMastery;
+    const masteryInc = toolBonus ? 2 : 1;
+
+    const addStat = (k, v) => { s[k] = clampInt((s[k] || 0) + v, 0, 999); };
+    const addTrait = (k, v) => { p[k] = clampInt((p[k] ?? 50) + v, 0, 100); };
+    const addMastery = (k, v) => { tm[k] = clampInt((tm[k] || 0) + v, 0, 999); };
+
+    if (type === 'strength') {
+        const hpInc = toolBonus ? 3 : 2;
+        gameState.son.maxHp += hpInc;
+        gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + hpInc);
+        addStat('physAtk', 1);
+        addTrait('endurance', 1);
+        addTrait('bravery', 1);
+        addMastery('strength', masteryInc);
+        return { label: '💪 근력 훈련', summary: `최대HP +${hpInc} · 물공 +1 · 인내 +1` };
+    }
+    if (type === 'magic') {
+        addStat('magicAtk', 1);
+        addStat('magicRes', 1);
+        addTrait('intelligence', 1);
+        addTrait('calmness', 1);
+        addMastery('magic', masteryInc);
+        return { label: '✨ 마법 훈련', summary: `마공 +1 · 마저 +1 · 지능 +1 · 차분 +1` };
+    }
+    if (type === 'archery') {
+        addStat('physAtk', 1);
+        addStat('agility', 1);
+        addStat('accuracy', 1);
+        addTrait('focus', 1);
+        addMastery('archery', masteryInc);
+        return { label: '🏹 사격 훈련', summary: `물공 +1 · 민첩 +1 · 명중 +1 · 집중 +1` };
+    }
+    return { label: '🤺 기본 훈련', summary: '' };
+}
+
+function getJobInfo() {
+    ensureSonGrowthState();
+    const tm = gameState.son.trainingMastery;
+    const p = gameState.son.personality;
+    const s = gameState.son.stats;
+
+    const entries = [
+        { key: 'strength', v: tm.strength || 0, name: '근력' },
+        { key: 'magic', v: tm.magic || 0, name: '마법' },
+        { key: 'archery', v: tm.archery || 0, name: '사격' }
+    ].sort((a, b) => b.v - a.v);
+
+    const top = entries[0];
+    const second = entries[1];
+    const maxV = top.v;
+    const margin = maxV - second.v;
+
+    const tier =
+        maxV >= 24 ? '전문가' :
+        maxV >= 14 ? '숙련자' :
+        maxV >= 6 ? '견습' :
+        '초보';
+
+    if (maxV < 4 || margin < 2) {
+        return {
+            title: `🧑‍🌾 ${tier} 모험가`,
+            subHtml: `근력 ${tm.strength || 0} · 마법 ${tm.magic || 0} · 사격 ${tm.archery || 0}<br><span style="color:#64748b;">아직은 다양한 길을 고민 중이에요.</span>`
+        };
+    }
+
+    if (top.key === 'strength') {
+        const role = p.endurance >= 60 || gameState.son.maxHp >= 160 ? '🛡️ 수호자' : '⚔️ 기사';
+        const perk = role.includes('수호자')
+            ? '부상 위험 감소 · 귀환 컨디션 소폭 상승'
+            : '골드 소폭 증가 · 부상 위험 소폭 감소';
+        return {
+            title: `${role} (${tier})`,
+            subHtml: `근력 숙련 ${tm.strength || 0} · 최대HP ${gameState.son.maxHp} · 물공 ${s.physAtk || 0} · 인내 ${p.endurance}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+        };
+    }
+    if (top.key === 'magic') {
+        const role = p.calmness >= 60 ? '🙏 사제' : '🧙‍♂️ 마법사';
+        const perk = role.includes('사제')
+            ? '부상 위험 감소 · 귀환 컨디션 상승'
+            : 'EXP 증가 · 전리품 소폭 증가';
+        return {
+            title: `${role} (${tier})`,
+            subHtml: `마법 숙련 ${tm.magic || 0} · 마공 ${s.magicAtk || 0} · 마저 ${s.magicRes || 0} · 지능 ${p.intelligence} · 차분 ${p.calmness}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+        };
+    }
+    const role = p.focus >= 60 ? '🏹 궁수' : '🦌 사냥꾼';
+    const perk = role.includes('사냥꾼')
+        ? '전리품 증가 · 골드 소폭 증가 · 부상 위험 소폭 증가'
+        : '전리품 소폭 증가 · EXP 소폭 증가';
+    return {
+        title: `${role} (${tier})`,
+        subHtml: `사격 숙련 ${tm.archery || 0} · 물공 ${s.physAtk || 0} · 민첩 ${s.agility || 0} · 명중 ${s.accuracy || 0} · 집중 ${p.focus}<br><span style="color:#64748b;">모험 특성: ${perk}</span>`
+    };
+}
+
+function getJobKey() {
+    ensureSonGrowthState();
+    const tm = gameState.son.trainingMastery;
+    const p = gameState.son.personality;
+
+    const entries = [
+        { key: 'strength', v: tm.strength || 0 },
+        { key: 'magic', v: tm.magic || 0 },
+        { key: 'archery', v: tm.archery || 0 }
+    ].sort((a, b) => b.v - a.v);
+    const top = entries[0];
+    const second = entries[1];
+    const maxV = top.v;
+    const margin = maxV - second.v;
+    if (maxV < 4 || margin < 2) return 'neutral';
+
+    if (top.key === 'strength') {
+        return (p.endurance >= 60 || gameState.son.maxHp >= 160) ? 'guardian' : 'knight';
+    }
+    if (top.key === 'magic') {
+        return (p.calmness >= 60) ? 'priest' : 'mage';
+    }
+    return (p.focus >= 60) ? 'archer' : 'hunter';
+}
+
+function getAdventureJobPerks() {
+    const key = getJobKey();
+    const base = {
+        key,
+        name: '모험가',
+        planRecMul: 1.0,
+        wGatherAdd: 0,
+        wHuntAdd: 0,
+        wBossAdd: 0,
+        goldMul: 1.0,
+        expMul: 1.0,
+        lootMul: 1.0,
+        riskMul: 1.0,
+        fatigueAdd: 0.0,
+        desc: ''
+    };
+
+    if (key === 'knight') {
+        return {
+            ...base,
+            name: '기사',
+            planRecMul: 1.05,
+            wGatherAdd: -0.06,
+            wHuntAdd: 0.06,
+            wBossAdd: 0.04,
+            goldMul: 1.03,
+            riskMul: 0.97,
+            desc: '골드 소폭 증가 · 부상 위험 소폭 감소'
+        };
+    }
+    if (key === 'guardian') {
+        return {
+            ...base,
+            name: '수호자',
+            planRecMul: 1.02,
+            wGatherAdd: -0.03,
+            wHuntAdd: 0.03,
+            wBossAdd: 0.05,
+            riskMul: 0.92,
+            fatigueAdd: 0.03,
+            desc: '부상 위험 감소 · 귀환 컨디션 소폭 상승'
+        };
+    }
+    if (key === 'mage') {
+        return {
+            ...base,
+            name: '마법사',
+            planRecMul: 1.04,
+            wGatherAdd: -0.04,
+            wHuntAdd: 0.02,
+            wBossAdd: 0.04,
+            expMul: 1.06,
+            lootMul: 1.02,
+            desc: 'EXP 증가 · 전리품 소폭 증가'
+        };
+    }
+    if (key === 'priest') {
+        return {
+            ...base,
+            name: '사제',
+            planRecMul: 0.98,
+            wGatherAdd: 0.08,
+            wHuntAdd: -0.02,
+            wBossAdd: -0.06,
+            riskMul: 0.94,
+            fatigueAdd: 0.04,
+            desc: '부상 위험 감소 · 귀환 컨디션 상승'
+        };
+    }
+    if (key === 'hunter') {
+        return {
+            ...base,
+            name: '사냥꾼',
+            planRecMul: 1.03,
+            wGatherAdd: 0.06,
+            wHuntAdd: 0.04,
+            wBossAdd: -0.03,
+            lootMul: 1.07,
+            goldMul: 1.02,
+            riskMul: 1.03,
+            desc: '전리품 증가 · 골드 소폭 증가 · 부상 위험 소폭 증가'
+        };
+    }
+    if (key === 'archer') {
+        return {
+            ...base,
+            name: '궁수',
+            planRecMul: 1.02,
+            wGatherAdd: -0.03,
+            wHuntAdd: 0.07,
+            wBossAdd: 0.02,
+            lootMul: 1.06,
+            expMul: 1.02,
+            riskMul: 1.02,
+            desc: '전리품 소폭 증가 · EXP 소폭 증가'
+        };
+    }
+    return { ...base, name: '모험가', desc: '특수 효과 없음' };
+}
+
+function getTraitSummary() {
+    const b = gameState.son.personality.bravery;
+    const d = gameState.son.personality.diligence;
+    const m = gameState.son.personality.morality ?? 50;
+    const f = gameState.son.personality.flexibility ?? 50;
+    const braveTxt = b >= 60 ? '대담' : b <= 40 ? '신중' : '균형';
+    const dilTxt = d >= 60 ? '성실' : d <= 40 ? '즉흥' : '보통';
+    const morTxt = m >= 60 ? '선함' : m <= 40 ? '냉정' : '중립';
+    const flexTxt = f >= 60 ? '유연' : f <= 40 ? '완고' : '보통';
+    const short = `${braveTxt} · ${dilTxt} · ${morTxt} · ${flexTxt}`;
+    let line = '';
+    if (b >= 60 && d >= 60) line = '스스로 목표를 세우고 끝까지 해내려는 타입이에요.';
+    else if (b >= 60 && d <= 40) line = '일단 해보는 타입! 가끔 무리수가 나올 수 있어요.';
+    else if (b <= 40 && d >= 60) line = '안전하게 준비를 마친 뒤 꾸준히 성장하는 타입이에요.';
+    else if (b <= 40 && d <= 40) line = '그날 기분에 따라 움직여요. 엄마 케어가 중요해요.';
+    else line = '상황에 따라 유연하게 움직여요.';
+    return { short, line };
+}
+
+function getPersonalityCode() {
+    ensureSonGrowthState();
+    const p = gameState.son.personality;
+    const code =
+        (p.bravery >= 50 ? 'B' : 'C') + // Brave / Cautious
+        (p.diligence >= 50 ? 'J' : 'P') + // Judging / Perceiving (feels familiar)
+        (p.morality >= 50 ? 'G' : 'E') + // Good / Evil-ish
+        (p.flexibility >= 50 ? 'F' : 'S'); // Flexible / Stubborn
+    return code;
+}
+
+// ============================================================
+// Injury system (partial failure + penalties + hospital)
+// ============================================================
+const injuryDefs = {
+    '경미': { label: '경미', remaining: 180, cpMul: 0.92, riskMul: 1.15, healMul: 0.9, hungerDrain: 0.05, hospitalCost: 120 },
+    '중상': { label: '중상', remaining: 360, cpMul: 0.80, riskMul: 1.35, healMul: 0.75, hungerDrain: 0.12, hospitalCost: 350 },
+    '심각': { label: '심각', remaining: 600, cpMul: 0.65, riskMul: 1.60, healMul: 0.6, hungerDrain: 0.18, hospitalCost: 900 }
+};
+const injuryRank = { '경미': 1, '중상': 2, '심각': 3 };
+
+function applyInjury(severity) {
+    const def = injuryDefs[severity];
+    if (!def) return;
+
+    if (gameState.son.injury) {
+        const current = gameState.son.injury;
+        const curRank = injuryRank[current.severity] || 1;
+        const newRank = injuryRank[severity] || 1;
+        if (newRank < curRank) {
+            // Don't downgrade; extend a bit instead
+            current.remaining = Math.min(900, (current.remaining || 0) + 60);
+            return;
+        }
+    }
+
+    gameState.son.injury = {
+        severity,
+        label: def.label,
+        remaining: def.remaining,
+        cpMul: def.cpMul,
+        riskMul: def.riskMul,
+        healMul: def.healMul,
+        hungerDrain: def.hungerDrain,
+        hospitalCost: def.hospitalCost
+    };
+    updateUI();
+}
+
+function clearInjury(reason = '') {
+    gameState.son.injury = null;
+    if (reason) addMail("🩹 회복", reason);
+    updateUI();
+}
+
+function treatInjuryAtHospital() {
+    const inj = gameState.son.injury;
+    if (!inj) return;
+    const cost = inj.hospitalCost || 200;
+    if (gameState.parent.gold < cost) {
+        showToast(`골드 부족! (필요: ${cost}G)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= cost;
+    clearInjury("병원 치료를 받고 회복했습니다.");
+    gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 2);
+    gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 1);
+    showToast(`🏥 치료 완료! (-${cost}G)`, 'success');
+}
+window.treatInjuryAtHospital = treatInjuryAtHospital;
+
+function injuryTick() {
+    const inj = gameState.son.injury;
+    if (!inj) return;
+    if (gameState.son.state === 'ADVENTURING') return;
+    inj.remaining = Math.max(0, (inj.remaining || 0) - 1);
+    if (inj.remaining <= 0) {
+        clearInjury("시간이 지나 부상이 자연 회복되었습니다.");
+        showToast("🩹 부상이 나았습니다!", 'success');
+    }
+}
+
+// ============================================================
 // UI Navigation
 // ============================================================
+function setMainView(viewKey) {
+    if (!els.views?.[viewKey]) return;
+    els.mainTabs.forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-view') === viewKey));
+    Object.entries(els.views).forEach(([k, el]) => {
+        if (!el) return;
+        el.classList.toggle('active', k === viewKey);
+    });
+    // leaving home implies mom isn't touching the wardrobe
+    if (viewKey !== 'home') {
+        ensureUiLocks();
+        gameState.parent.uiLocks.wardrobe = false;
+    }
+}
+window.setMainView = setMainView;
+
+els.mainTabs.forEach(tab => {
+    tab.addEventListener('click', () => setMainView(tab.getAttribute('data-view')));
+});
+
+// Town hub navigation (cards -> detail)
+const townSections = {
+    life: {
+        title: '생활',
+        subs: [],
+        defaultSys: 'sys-work'
+    },
+    shop: {
+        title: '상점',
+        subs: [],
+        defaultSys: 'sys-shop'
+    },
+    smith: {
+        title: '대장간',
+        subs: [],
+        defaultSys: 'sys-smith'
+    }
+};
+const townNav = {
+    route: 'hub',
+    section: 'life',
+    sysBySection: { life: 'sys-work', shop: 'sys-shop', smith: 'sys-smith' }
+};
+
+function setTownSys(sysId) {
+    if (!sysId) return;
+    els.sysContents.forEach(c => c.classList.remove('active'));
+    const target = document.getElementById(sysId);
+    if (target) target.classList.add('active');
+
+    if (els.townSubtabs) {
+        els.townSubtabs.querySelectorAll('[data-town-sys]').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-town-sys') === sysId);
+        });
+    }
+    if (townNav.section) townNav.sysBySection[townNav.section] = sysId;
+    updateUI();
+}
+
+function applySmithyTabUI() {
+    ensureSmithy();
+    const tab = gameState.parent.smithy.uiTab || 'gacha';
+    const btns = document.querySelectorAll('#sys-smith [data-smith-tab]');
+    btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-smith-tab') === tab));
+    const panes = [
+        { id: 'smith-tab-gacha', key: 'gacha' },
+        { id: 'smith-tab-synth', key: 'synth' },
+        { id: 'smith-tab-craft', key: 'craft' }
+    ];
+    panes.forEach(p => {
+        const el = document.getElementById(p.id);
+        if (!el) return;
+        el.classList.toggle('active', p.key === tab);
+    });
+}
+
+function setSmithyTab(tabKey) {
+    ensureSmithy();
+    const t = (tabKey === 'synth' || tabKey === 'craft') ? tabKey : 'gacha';
+    gameState.parent.smithy.uiTab = t;
+    applySmithyTabUI();
+    updateUI();
+}
+window.setSmithyTab = setSmithyTab;
+
+function applyShopTabUI() {
+    ensureShopState();
+    const tab = gameState.parent.shop.uiTab || 'grocery';
+    const btns = document.querySelectorAll('#sys-shop [data-shop-tab]');
+    btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-shop-tab') === tab));
+    const panes = [
+        { id: 'shop-tab-grocery', key: 'grocery' },
+        { id: 'shop-tab-general', key: 'general' },
+        { id: 'shop-tab-book', key: 'book' }
+    ];
+    panes.forEach(p => {
+        const el = document.getElementById(p.id);
+        if (!el) return;
+        el.classList.toggle('active', p.key === tab);
+    });
+}
+
+function setShopTab(tabKey) {
+    ensureShopState();
+    const t = (tabKey === 'general' || tabKey === 'book') ? tabKey : 'grocery';
+    gameState.parent.shop.uiTab = t;
+    applyShopTabUI();
+    updateUI();
+}
+window.setShopTab = setShopTab;
+
+function applySonTabUI() {
+    ensureSonUiState();
+    const tab = gameState.parent.sonUiTab || 'summary';
+    const btns = document.querySelectorAll('#sys-son [data-son-tab]');
+    btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-son-tab') === tab));
+    const panes = [
+        { id: 'son-tab-summary', key: 'summary' },
+        { id: 'son-tab-gear', key: 'gear' },
+        { id: 'son-tab-world', key: 'world' }
+    ];
+    panes.forEach(p => {
+        const el = document.getElementById(p.id);
+        if (!el) return;
+        el.classList.toggle('active', p.key === tab);
+    });
+}
+
+function setSonTab(tabKey) {
+    ensureSonUiState();
+    const t = (tabKey === 'gear' || tabKey === 'world') ? tabKey : 'summary';
+    gameState.parent.sonUiTab = t;
+    applySonTabUI();
+    updateUI();
+}
+window.setSonTab = setSonTab;
+
+function pinSupportTask(task) {
+    ensureSupportPinState();
+    if (!task || typeof task !== 'object' || !task.type) return;
+    gameState.parent.supportPin = deepClone(task);
+    showToast("📌 서포트를 핀했어요.", 'info');
+    updateUI();
+}
+window.pinSupportTask = pinSupportTask;
+
+function clearSupportPin() {
+    ensureSupportPinState();
+    gameState.parent.supportPin = null;
+    showToast("📌 핀을 해제했어요.", 'info');
+    updateUI();
+}
+window.clearSupportPin = clearSupportPin;
+
+function goToSupportPin() {
+    ensureSupportPinState();
+    const pin = gameState.parent.supportPin;
+    if (!pin) return;
+    if (pin.type === 'treat') {
+        setMainView('son');
+        setSonTab('summary');
+        return;
+    }
+    if (pin.type === 'craftGear' || pin.type === 'craftMilestone') {
+        setMainView('town');
+        openTownSection('smith');
+        setSmithyTab('craft');
+        return;
+    }
+    if (pin.type === 'cook') {
+        setMainView('home');
+        setHomeRoomView('room-table');
+        return;
+    }
+    if (pin.type === 'bookshelf') {
+        setMainView('home');
+        setHomeRoomView('room-desk');
+        return;
+    }
+    if (pin.type === 'buySandbag') {
+        setMainView('town');
+        openTownSection('shop');
+        setShopTab('general');
+        return;
+    }
+}
+window.goToSupportPin = goToSupportPin;
+
+function openTownHub() {
+    townNav.route = 'hub';
+    if (els.townHub) els.townHub.style.display = 'grid';
+    if (els.townDetail) els.townDetail.style.display = 'none';
+}
+window.openTownHub = openTownHub;
+
+function openTownSection(sectionKey) {
+    const section = townSections[sectionKey];
+    if (!section) return;
+    townNav.route = 'detail';
+    townNav.section = sectionKey;
+
+    if (els.townHub) els.townHub.style.display = 'none';
+    if (els.townDetail) els.townDetail.style.display = 'flex';
+    if (els.townTitle) els.townTitle.innerText = section.title;
+
+    if (els.townSubtabs) {
+        if (section.subs && section.subs.length > 0) {
+            els.townSubtabs.style.display = 'block';
+            const html = `
+                <div class="segmented">
+                    ${section.subs.map(s => `<button class="seg-btn" type="button" data-town-sys="${s.sys}">${s.label}</button>`).join('')}
+                </div>
+            `;
+            els.townSubtabs.innerHTML = html;
+        } else {
+            els.townSubtabs.style.display = 'none';
+            els.townSubtabs.innerHTML = '';
+        }
+    }
+
+    const sysId = townNav.sysBySection[sectionKey] || section.defaultSys;
+    setTownSys(sysId);
+
+    const smithH3 = document.getElementById('smithy-h3');
+    if (smithH3) smithH3.innerText = '대장간';
+}
+window.openTownSection = openTownSection;
+
+if (els.townCards && els.townCards.length) {
+    els.townCards.forEach(card => {
+        card.addEventListener('click', () => openTownSection(card.getAttribute('data-town')));
+    });
+}
+if (els.townBack) {
+    els.townBack.addEventListener('click', () => openTownHub());
+}
+if (els.townSubtabs) {
+    els.townSubtabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-town-sys]');
+        if (!btn) return;
+        setTownSys(btn.getAttribute('data-town-sys'));
+    });
+}
+
 els.roomTabs.forEach(tab => {
     tab.addEventListener('click', () => {
         els.roomTabs.forEach(t => t.classList.remove('active'));
@@ -212,22 +2916,210 @@ els.roomTabs.forEach(tab => {
         tab.classList.add('active');
         const roomId = tab.getAttribute('data-room');
         els.roomViews[roomId].classList.add('active');
+        ensureUiLocks();
+        gameState.parent.uiLocks.wardrobe = roomId === 'room-wardrobe';
         updateUpgradeButtons(roomId);
+        if (roomId === 'room-wardrobe') updateWardrobeUI();
     });
 });
-els.sysTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-        els.sysTabs.forEach(t => t.classList.remove('active'));
-        els.sysContents.forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.getAttribute('data-sys')).classList.add('active');
+openTownHub();
+
+function setHomeRoomView(roomId) {
+    if (!els.roomViews?.[roomId]) return;
+    els.roomTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-room') === roomId));
+    Object.entries(els.roomViews).forEach(([k, v]) => {
+        if (!v) return;
+        v.classList.toggle('active', k === roomId);
     });
-});
+    ensureUiLocks();
+    gameState.parent.uiLocks.wardrobe = roomId === 'room-wardrobe';
+    updateUpgradeButtons(roomId);
+    if (roomId === 'room-wardrobe') updateWardrobeUI();
+}
+window.setHomeRoomView = setHomeRoomView;
 
 // ============================================================
 // Toast-based Buy / Inventory
 // ============================================================
 let currentTargetRoom = null;
+let currentInventoryMode = 'place'; // 'place' | 'equip'
+
+function ensureKitchenState() {
+    if (!gameState.parent.kitchen || typeof gameState.parent.kitchen !== 'object') {
+        gameState.parent.kitchen = { cooking: null };
+    }
+    if (!('cooking' in gameState.parent.kitchen)) gameState.parent.kitchen.cooking = null;
+}
+
+function getPantryCount(key) {
+    ensurePantry();
+    return gameState.parent.harvestBag[key] || 0;
+}
+
+function needsTextFromRecipe(recipe) {
+    const parts = Object.entries(recipe.needs || {}).map(([k, v]) => {
+        const have = getPantryCount(k);
+        const color = have >= v ? '#10b981' : '#ef4444';
+        const nm = ingredientNames[k] || k;
+        return `<span style="color:${color}; font-weight:900;">${nm} ${have}/${v}</span>`;
+    });
+    return parts.join(' ');
+}
+
+function canCookRecipe(recipe) {
+    return Object.entries(recipe.needs || {}).every(([k, v]) => getPantryCount(k) >= v);
+}
+
+function openKitchenCookMenu() {
+    ensureKitchenState();
+    ensurePantry();
+    const cooking = gameState.parent.kitchen.cooking;
+    const placed = gameState.rooms['room-table']?.placedItem;
+
+    currentInventoryMode = 'cook';
+    currentTargetRoom = 'room-table';
+    if (els.invDesc) {
+        els.invDesc.innerText = cooking
+            ? `조리 중... (${Math.max(0, cooking.remaining)}초 남음)`
+            : placed
+                ? '식탁에 음식이 있어요. 아들이 먹으면 비워집니다.'
+                : '조리할 메뉴를 선택하세요. (조리 시간: 3~10초)';
+    }
+    els.invList.innerHTML = '';
+
+    // Pantry summary
+    const pantryKeys = Object.keys(ingredientNames);
+    const summary = pantryKeys
+        .filter(k => (gameState.parent.harvestBag[k] || 0) > 0)
+        .map(k => `${ingredientNames[k]} ${gameState.parent.harvestBag[k]}`)
+        .join(' · ');
+    const sumDiv = document.createElement('div');
+    sumDiv.style.cssText = 'margin-bottom:10px; font-size:0.78rem; color:#64748b; line-height:1.35;';
+    sumDiv.innerHTML = summary ? `보유 재료: <b>${summary}</b>` : '보유 재료가 없습니다. (마을에서 재료를 구매하거나 텃밭에서 수확하세요)';
+    els.invList.appendChild(sumDiv);
+
+    if (cooking) {
+        const p = document.createElement('div');
+        p.style.cssText = 'padding:10px; background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; font-size:0.85rem; font-weight:900; color:#0f172a;';
+        const r = recipes.find(x => x.id === cooking.recipeId);
+        p.innerText = `🍳 ${r?.name || cooking.recipeId} 조리 중... ${Math.max(0, cooking.remaining)}초`;
+        els.invList.appendChild(p);
+        els.invModal.style.display = 'flex';
+        return;
+    }
+
+    if (placed) {
+        const btnClear = document.createElement('button');
+        btnClear.className = 'action-btn';
+        btnClear.style.cssText = 'background:#ef4444; margin-top:0;';
+        btnClear.innerText = '🧹 식탁 치우기';
+        btnClear.onclick = () => {
+            gameState.rooms['room-table'].placedItem = null;
+            updateUI();
+            showToast("식탁을 비웠습니다.", 'info');
+            closeInventory();
+        };
+        els.invList.appendChild(btnClear);
+        els.invModal.style.display = 'flex';
+        return;
+    }
+
+    recipes.forEach(recipe => {
+        const can = canCookRecipe(recipe);
+        const div = document.createElement('div');
+        div.style.cssText = `display:flex; justify-content:space-between; align-items:center; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px; ${can ? '' : 'opacity:0.8;'}`;
+        div.innerHTML = `
+          <div style="flex:1; font-size:0.82rem;">
+            <div style="font-weight:1000; color:#0f172a;">${recipe.name} <span style="color:#64748b; font-size:0.75rem;">(${recipe.desc})</span></div>
+            <div style="margin-top:6px; font-size:0.75rem;">${needsTextFromRecipe(recipe)}</div>
+          </div>
+        `;
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.style.cssText = 'width:auto; padding:8px 12px; margin:0; font-size:0.78rem; background:#10b981;';
+        btn.disabled = !can;
+        btn.innerText = can ? '조리 시작' : '재료 부족';
+        btn.onclick = () => startKitchenCooking(recipe.id);
+        div.appendChild(btn);
+        els.invList.appendChild(div);
+    });
+
+    els.invModal.style.display = 'flex';
+}
+
+function startKitchenCooking(recipeId) {
+    ensureKitchenState();
+    ensurePantry();
+    const cooking = gameState.parent.kitchen.cooking;
+    if (cooking) {
+        showToast("이미 조리 중입니다.", 'warning');
+        return;
+    }
+    if (gameState.rooms['room-table']?.placedItem) {
+        showToast("식탁에 이미 음식이 있어요.", 'warning');
+        return;
+    }
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    if (!canCookRecipe(recipe)) {
+        showToast("재료가 부족합니다!", 'error');
+        return;
+    }
+
+    // consume mats now
+    Object.entries(recipe.needs || {}).forEach(([k, v]) => {
+        gameState.parent.harvestBag[k] = Math.max(0, (gameState.parent.harvestBag[k] || 0) - v);
+    });
+    const total = 3 + Math.floor(Math.random() * 8); // 3~10
+    gameState.parent.kitchen.cooking = { recipeId, remaining: total, total };
+    showToast(`🍳 조리 시작: ${recipe.name} (${total}초)`, 'info');
+    closeInventory();
+    updateUI();
+}
+
+function getKitchenItemEmoji(itemId) {
+    const r = recipes.find(x => x.id === itemId);
+    if (r?.name) return r.name.split(' ')[0];
+    const inv = gameState.parent.inventory?.[itemId];
+    if (inv?.name) return inv.name.split(' ')[0];
+    return '🍽️';
+}
+
+function getKitchenItemName(itemId) {
+    const r = recipes.find(x => x.id === itemId);
+    if (r?.name) return r.name;
+    const inv = gameState.parent.inventory?.[itemId];
+    if (inv?.name) return inv.name;
+    return itemId;
+}
+
+function updateKitchenSlotUI() {
+    if (!els.slots?.['room-table']) return;
+    ensureKitchenState();
+    const slotEl = els.slots['room-table'];
+    const cooking = gameState.parent.kitchen.cooking;
+    const placed = gameState.rooms['room-table']?.placedItem;
+
+    if (cooking) {
+        const r = recipes.find(x => x.id === cooking.recipeId);
+        const label = `조리 중... ${Math.max(0, cooking.remaining)}초`;
+        slotEl.innerHTML = `<span class="slot-label">${label}</span>🍳`;
+        slotEl.classList.add('filled');
+        slotEl.classList.add('cooking');
+        return;
+    }
+
+    slotEl.classList.remove('cooking');
+    if (placed) {
+        const emoji = getKitchenItemEmoji(placed);
+        slotEl.innerHTML = `<span class="slot-label">식탁 위 음식</span>${emoji}`;
+        slotEl.classList.add('filled');
+    } else {
+        slotEl.innerHTML = `<span class="slot-label">🍳 요리하기</span>➕`;
+        slotEl.classList.remove('filled');
+    }
+}
+
 
 function buyItem(itemId, cost) {
     if (gameState.parent.gold >= cost) {
@@ -241,12 +3133,346 @@ function buyItem(itemId, cost) {
 }
 window.buyItem = buyItem;
 
+function buyGear(slot, itemId) {
+    const inv = gameState.parent.gearInventory?.[slot];
+    if (!inv || !inv[itemId]) return;
+    const item = inv[itemId];
+    if (gameState.parent.gold < item.cost) {
+        showToast("골드 부족!", 'error');
+        return;
+    }
+    gameState.parent.gold -= item.cost;
+    item.count++;
+    showToast(`${item.name} 구매 완료!`, 'success');
+    updateUI();
+}
+window.buyGear = buyGear;
+
+function buyMaterial(key, cost, amount = 1) {
+    ensureLootKey(key);
+    const a = Math.max(1, Math.floor(amount));
+    const total = cost * a;
+    if (gameState.parent.gold < total) {
+        showToast(`골드 부족! (필요: ${total}G)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= total;
+    gameState.parent.loot[key].count += a;
+    showToast(`${gameState.parent.loot[key].name} x${a} 구매!`, 'success');
+    updateUI();
+}
+window.buyMaterial = buyMaterial;
+
+function ensurePantry() {
+    if (!gameState.parent.harvestBag || typeof gameState.parent.harvestBag !== 'object') {
+        gameState.parent.harvestBag = {};
+    }
+}
+
+function buyIngredient(key, cost, amount = 1) {
+    ensurePantry();
+    const a = Math.max(1, Math.floor(amount));
+    const total = cost * a;
+    if (gameState.parent.gold < total) {
+        showToast(`골드 부족! (필요: ${total}G)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= total;
+    if (!gameState.parent.harvestBag[key]) gameState.parent.harvestBag[key] = 0;
+    gameState.parent.harvestBag[key] += a;
+    showToast(`${ingredientNames[key] || key} x${a} 구매!`, 'success');
+    updateUI();
+}
+window.buyIngredient = buyIngredient;
+
+function buySeed(totalCost, amount = 1) {
+    ensureFarm();
+    const a = Math.max(1, Math.floor(amount));
+    const total = Math.max(0, Math.floor(totalCost || 0));
+    if (total <= 0) return;
+    if (gameState.parent.gold < total) {
+        showToast(`골드 부족! (필요: ${total}G)`, 'error');
+        return;
+    }
+    gameState.parent.gold -= total;
+    gameState.parent.farm.seed += a;
+    showToast(`🌱 씨앗 x${a} 구매! (-${total}G)`, 'success');
+    updateUI();
+}
+window.buySeed = buySeed;
+
+// ============================================================
+// Crafting system (4 slots x 10 tiers + weapon milestones)
+// ============================================================
+const craftConfig = {
+    slots: ['helmet', 'armor', 'boots'],
+    tierCount: 10,
+    milestoneWeapons: [
+        { tier: 3, id: 'wolf_sword', name: '🐺 늑대의 보검', needs: { wolf_fang: 3, leather: 4, steel: 2 } },
+        { tier: 6, id: 'relic_sword', name: '🏛️ 유적의 보검', needs: { relic_fragment: 4, steel: 6, magic_crystal: 3 } },
+        { tier: 10, id: 'dragon_sword', name: '🐉 드래곤 스워드', needs: { dragon_heart: 1, wyvern_scale: 6, steel: 10, magic_crystal: 6 } }
+    ]
+};
+
+function materialHave(key) {
+    ensureLootKey(key);
+    return gameState.parent.loot[key]?.count || 0;
+}
+
+function canCraftNeeds(needs) {
+    return Object.entries(needs).every(([k, v]) => materialHave(k) >= v);
+}
+
+function consumeNeeds(needs) {
+    Object.entries(needs).forEach(([k, v]) => {
+        ensureLootKey(k);
+        gameState.parent.loot[k].count = Math.max(0, (gameState.parent.loot[k].count || 0) - v);
+    });
+}
+
+function tierStageMaterials(tier) {
+    if (tier <= 3) return { core: 'wolf_fang', baseA: 'leather', baseB: 'steel' };
+    if (tier <= 6) return { core: 'relic_fragment', baseA: 'steel', baseB: 'magic_crystal' };
+    if (tier <= 9) return { core: 'wyvern_scale', baseA: 'steel', baseB: 'rare_hide' };
+    return { core: 'dragon_heart', baseA: 'steel', baseB: 'magic_crystal' };
+}
+
+function slotName(slot) {
+    if (slot === 'helmet') return '🪖 투구';
+    if (slot === 'armor') return '🧥 갑옷';
+    if (slot === 'boots') return '👢 신발';
+    return slot;
+}
+
+function makeGearName(slot, tier, stage) {
+    const themes = {
+        wolf_fang: '늑대',
+        relic_fragment: '유적',
+        wyvern_scale: '와이번',
+        dragon_heart: '드래곤'
+    };
+    const theme = themes[stage.core] || '장비';
+    return `${theme} ${slot === 'helmet' ? '투구' : slot === 'armor' ? '갑옷' : '신발'} T${tier}`;
+}
+
+function calcGearDef(slot, tier) {
+    const base = slot === 'armor' ? 4 : slot === 'helmet' ? 2 : 1;
+    const growth = slot === 'armor' ? 2.0 : slot === 'helmet' ? 1.4 : 1.1;
+    return Math.max(1, Math.floor(base + tier * growth));
+}
+
+function buildGearRecipe(slot, tier) {
+    const stage = tierStageMaterials(tier);
+    const def = calcGearDef(slot, tier);
+    ensureLootKey(stage.core);
+    ensureLootKey(stage.baseA);
+    ensureLootKey(stage.baseB);
+
+    const coreQty = tier <= 3 ? 1 : tier <= 6 ? 2 : tier <= 9 ? 3 : 1;
+    const baseAQty = 1 + Math.floor(tier * 0.9);
+    const baseBQty = tier <= 3 ? 0 + Math.floor(tier * 0.3) : 1 + Math.floor(tier * 0.6);
+
+    // Slot-specific bias
+    const needs = {};
+    needs[stage.core] = coreQty + (slot === 'armor' ? 1 : 0);
+    needs[stage.baseA] = baseAQty + (slot === 'armor' ? 2 : slot === 'boots' ? -1 : 0);
+    if (baseBQty > 0) needs[stage.baseB] = baseBQty + (slot === 'helmet' ? 1 : 0);
+
+    const id = `${slot}_t${tier}`;
+    const name = makeGearName(slot, tier, stage);
+    let needsGear = null;
+    if (tier > 1) {
+        const prevTier = tier - 1;
+        const prevStage = tierStageMaterials(prevTier);
+        const prevId = `${slot}_t${prevTier}`;
+        const prevName = makeGearName(slot, prevTier, prevStage);
+        needsGear = { id: prevId, name: prevName, count: 1 };
+    }
+    return { id, slot, tier, name, def, needs, needsGear, themeCore: stage.core };
+}
+
+function craftGear(slot, recipeId) {
+    const inv = gameState.parent.gearInventory?.[slot];
+    if (!inv) return;
+    const tier = parseInt((recipeId.split('_t')[1] || '').trim(), 10);
+    const recipe = buildGearRecipe(slot, Number.isFinite(tier) ? tier : 1);
+    const hasPrev = !recipe.needsGear || ((inv[recipe.needsGear.id]?.count || 0) >= recipe.needsGear.count);
+    if (!hasPrev) {
+        showToast("이전 티어 장비가 필요합니다!", 'warning');
+        return;
+    }
+    if (!canCraftNeeds(recipe.needs)) {
+        showToast("재료가 부족합니다!", 'error');
+        return;
+    }
+    // Consume previous tier gear for upgrades
+    if (recipe.needsGear) {
+        inv[recipe.needsGear.id].count -= recipe.needsGear.count;
+    }
+    consumeNeeds(recipe.needs);
+    if (!inv[recipe.id]) {
+        inv[recipe.id] = { id: recipe.id, name: recipe.name, def: recipe.def, count: 0, cost: 0, tier: recipe.tier };
+    }
+    inv[recipe.id].count++;
+    const actionLabel = recipe.tier === 1 ? '제작' : '승급';
+    showToast(`${recipe.name} ${actionLabel} 완료!`, 'gold');
+    addMail("🧵 제작 완료", `${slotName(slot)}: <b>${recipe.name}</b> (방+${recipe.def})`);
+    updateUI();
+}
+window.craftGear = craftGear;
+
+function craftMilestoneWeapon(weaponId) {
+    const w = gameState.parent.specialWeaponInventory?.[weaponId];
+    const def = craftConfig.milestoneWeapons.find(m => m.id === weaponId);
+    if (!w || !def) return;
+    const needs = def.needs;
+    if (!canCraftNeeds(needs)) {
+        showToast("재료가 부족합니다!", 'error');
+        return;
+    }
+    consumeNeeds(needs);
+    w.count++;
+    showToast(`${w.name} 제작 완료!`, 'gold');
+    addMail("🧵 제작 완료", `<b>${w.name}</b> (공+${w.atk})`);
+    updateUI();
+}
+window.craftMilestoneWeapon = craftMilestoneWeapon;
+
+function dismantleGear(slot, recipeId) {
+    const inv = gameState.parent.gearInventory?.[slot];
+    if (!inv) return;
+    const item = inv[recipeId];
+    if (!item || item.count <= 0) return;
+
+    const tier = parseInt((recipeId.split('_t')[1] || '').trim(), 10);
+    const recipe = buildGearRecipe(slot, Number.isFinite(tier) ? tier : 1);
+
+    // Remove one item
+    item.count--;
+
+    // Salvage base materials only (core stays precious)
+    const stage = tierStageMaterials(recipe.tier);
+    const coreKey = stage.core;
+    const salvage = {};
+    for (const [k, v] of Object.entries(recipe.needs)) {
+        if (k === coreKey || k === 'dragon_heart') continue;
+        const ratio = 0.45;
+        const amt = Math.max(0, Math.floor(v * ratio));
+        if (amt > 0) salvage[k] = (salvage[k] || 0) + amt;
+    }
+    Object.entries(salvage).forEach(([k, v]) => {
+        ensureLootKey(k);
+        gameState.parent.loot[k].count += v;
+    });
+
+    const salvageText = Object.entries(salvage).map(([k, v]) => `${gameState.parent.loot[k].name} x${v}`).join(', ');
+    showToast(`해체 완료! ${salvageText || '환급 없음'}`, 'info');
+    updateUI();
+}
+window.dismantleGear = dismantleGear;
+
+function needsText(needs) {
+    return Object.entries(needs).map(([k, v]) => {
+        ensureLootKey(k);
+        const have = materialHave(k);
+        const color = have >= v ? '#10b981' : '#ef4444';
+        return `<span style="color:${color}; font-weight:900;">${gameState.parent.loot[k].name} ${have}/${v}</span>`;
+    }).join(' · ');
+}
+
+function gearNeedText(slot, needsGear) {
+    if (!needsGear) return '';
+    const inv = gameState.parent.gearInventory?.[slot] || {};
+    const have = inv[needsGear.id]?.count || 0;
+    const need = needsGear.count || 1;
+    const color = have >= need ? '#10b981' : '#ef4444';
+    return `<span style="color:${color}; font-weight:900;">이전 장비 ${needsGear.name} ${have}/${need}</span>`;
+}
+
+function updateCraftUI() {
+    const root = document.getElementById('craft-list');
+    if (!root) return;
+    let html = '';
+
+    // Gear sections
+    for (const slot of craftConfig.slots) {
+        html += `<div class="craft-section"><div class="craft-title">${slotName(slot)} <span class="craft-meta">10단계</span></div>`;
+        for (let tier = 1; tier <= craftConfig.tierCount; tier++) {
+            const r = buildGearRecipe(slot, tier);
+            const inv = gameState.parent.gearInventory?.[slot] || {};
+            const hasPrev = !r.needsGear || ((inv[r.needsGear.id]?.count || 0) >= (r.needsGear.count || 1));
+            const can = canCraftNeeds(r.needs) && hasPrev;
+            const owned = inv[r.id]?.count || 0;
+            const actionLabel = tier === 1 ? '제작' : '승급';
+            html += `
+              <div class="craft-item ${can ? '' : 'locked'}">
+                <div class="craft-row">
+                  <div>
+                    <div class="craft-name">T${tier} · ${r.name}</div>
+                    <div class="craft-meta">방어 +${r.def} · 보유 ${owned}개 · 핵심: ${gameState.parent.loot[r.themeCore]?.name || r.themeCore}</div>
+                  </div>
+                  <div style="display:flex; gap:6px;">
+                    <button class="craft-btn" ${can ? '' : 'disabled'} onclick="craftGear('${slot}', '${r.id}')">${actionLabel}</button>
+                    <button class="craft-btn" ${(owned > 0) ? '' : 'disabled'} style="background:#334155" onclick="dismantleGear('${slot}', '${r.id}')">해체</button>
+                  </div>
+                </div>
+                <div class="craft-needs">${gearNeedText(slot, r.needsGear)}${r.needsGear ? '<br>' : ''}${needsText(r.needs)}</div>
+              </div>
+            `;
+        }
+        html += `</div>`;
+    }
+
+    // Weapon milestones
+    html += `<div class="craft-section"><div class="craft-title">🗡️ 무기(마일스톤) <span class="craft-meta">T3/T6/T10</span></div>`;
+    for (const m of craftConfig.milestoneWeapons) {
+        const w = gameState.parent.specialWeaponInventory?.[m.id];
+        const can = canCraftNeeds(m.needs);
+        html += `
+          <div class="craft-item ${can ? '' : 'locked'}">
+            <div class="craft-row">
+              <div>
+                <div class="craft-name">T${m.tier} · ${m.name}</div>
+                <div class="craft-meta">공격 +${w?.atk ?? '?'} · 특별 무기</div>
+              </div>
+              <button class="craft-btn" ${can ? '' : 'disabled'} onclick="craftMilestoneWeapon('${m.id}')">제작</button>
+            </div>
+            <div class="craft-needs">${needsText(m.needs)}</div>
+          </div>
+        `;
+    }
+    html += `</div>`;
+
+    root.innerHTML = html;
+}
+
 function openInventory(roomType) {
-    currentTargetRoom = roomType === 'kitchen' ? 'room-table' : roomType === 'study' ? 'room-desk' : roomType === 'training' ? 'room-dummy' : 'room-bed';
+    if (roomType === 'kitchen') {
+        openKitchenCookMenu();
+        return;
+    }
+    if (roomType === 'study') {
+        openBookshelfManager();
+        return;
+    }
+    const equipTypes = ['weapon', 'helmet', 'armor', 'boots'];
+    currentInventoryMode = equipTypes.includes(roomType) ? 'equip' : 'place';
+    if (els.invDesc) {
+        const modeText = currentInventoryMode === 'equip'
+            ? '장착할 장비를 선택하세요.'
+            : '이 방에 배치할 아이템을 선택하세요.';
+        els.invDesc.innerText = modeText;
+    }
+    if (currentInventoryMode === 'place') {
+        currentTargetRoom = roomType === 'kitchen' ? 'room-table' : roomType === 'study' ? 'room-desk' : roomType === 'training' ? 'room-dummy' : 'room-bed';
+    } else {
+        currentTargetRoom = null;
+    }
     els.invList.innerHTML = '';
     let hasItems = false;
 
     if (roomType === 'weapon') {
+        // Tier weapons (gacha)
         Object.keys(gameState.parent.weaponInventory).forEach(tier => {
             const item = gameState.parent.weaponInventory[tier];
             if (item.count > 0) {
@@ -254,7 +3480,32 @@ function openInventory(roomType) {
                 const btn = document.createElement('button');
                 btn.className = 'item-btn';
                 btn.innerText = `[${tier}급] ${item.name} (보유: ${item.count})`;
-                btn.onclick = () => equipWeapon(tier);
+                btn.onclick = () => equipWeaponTier(tier);
+                els.invList.appendChild(btn);
+            }
+        });
+        // Crafted/special weapons
+        Object.keys(gameState.parent.specialWeaponInventory || {}).forEach(k => {
+            const w = gameState.parent.specialWeaponInventory[k];
+            if (w.count > 0) {
+                hasItems = true;
+                const btn = document.createElement('button');
+                btn.className = 'item-btn';
+                btn.innerText = `[특별] ${w.name} (공+${w.atk}) (보유: ${w.count})`;
+                btn.onclick = () => equipSpecialWeapon(w.id);
+                els.invList.appendChild(btn);
+            }
+        });
+    } else if (['helmet', 'armor', 'boots'].includes(roomType)) {
+        const inv = gameState.parent.gearInventory?.[roomType] || {};
+        Object.keys(inv).forEach(key => {
+            const item = inv[key];
+            if (item.count > 0) {
+                hasItems = true;
+                const btn = document.createElement('button');
+                btn.className = 'item-btn';
+                btn.innerText = `${item.name} (방어 +${item.def}) (보유: ${item.count})`;
+                btn.onclick = () => equipGear(roomType, item.id);
                 els.invList.appendChild(btn);
             }
         });
@@ -276,12 +3527,75 @@ function openInventory(roomType) {
 }
 window.openInventory = openInventory;
 
-function equipWeapon(tier) {
+function equipGear(slot, itemId) {
+    const inv = gameState.parent.gearInventory?.[slot];
+    if (!inv) return;
+    const item = inv[itemId];
+    if (!item || item.count <= 0) return;
+
+    item.count--;
+
+    const old = gameState.son.equipment[slot];
+    if (old && old.id && !old.id.startsWith('none_')) {
+        const oldInv = gameState.parent.gearInventory?.[slot];
+        if (oldInv && oldInv[old.id]) oldInv[old.id].count++;
+    }
+
+    gameState.son.equipment[slot] = {
+        id: item.id,
+        name: item.name,
+        atk: 0,
+        def: item.def || 0,
+        tier: 'C'
+    };
+    closeInventory();
+    updateUI();
+    showToast(`${item.name} 장착!`, 'success');
+}
+window.equipGear = equipGear;
+
+function unequipGear(slot) {
+    const current = gameState.son.equipment?.[slot];
+    if (!current || !current.id || current.id.startsWith('none_')) {
+        showToast("해제할 장비가 없습니다.", 'warning');
+        return;
+    }
+    const inv = gameState.parent.gearInventory?.[slot];
+    if (inv) {
+        if (!inv[current.id]) {
+            inv[current.id] = { id: current.id, name: current.name, def: current.def || 0, count: 0, cost: 0, tier: current.tier || 1 };
+        }
+        inv[current.id].count++;
+    }
+    // Set base item
+    const baseMap = {
+        helmet: { id: 'none_helmet', name: '맨머리', atk: 0, def: 0, tier: 'C' },
+        armor: { id: 'none_armor', name: '허름한 옷', atk: 0, def: 0, tier: 'C' },
+        boots: { id: 'none_boots', name: '맨발', atk: 0, def: 0, tier: 'C' }
+    };
+    gameState.son.equipment[slot] = baseMap[slot] || gameState.son.equipment[slot];
+    showToast("장비를 해제했습니다.", 'info');
+    updateUI();
+}
+window.unequipGear = unequipGear;
+
+function equipWeaponTier(tier) {
     if (gameState.parent.weaponInventory[tier].count > 0) {
         gameState.parent.weaponInventory[tier].count--;
-        const currentTier = gameState.son.weapon.tier;
-        gameState.parent.weaponInventory[currentTier].count++;
-        gameState.son.weapon = { name: gameState.parent.weaponInventory[tier].name, atk: gameState.parent.weaponInventory[tier].atk, tier: tier };
+        const currentTier = gameState.son.equipment.weapon.tier;
+        // return previous weapon to appropriate inventory
+        if (gameState.son.equipment.weapon.id && gameState.son.equipment.weapon.id.startsWith('weapon_')) {
+            gameState.parent.weaponInventory[currentTier].count++;
+        } else if (gameState.son.equipment.weapon.id && (gameState.parent.specialWeaponInventory?.[gameState.son.equipment.weapon.id])) {
+            gameState.parent.specialWeaponInventory[gameState.son.equipment.weapon.id].count++;
+        }
+        gameState.son.equipment.weapon = {
+            id: `weapon_${tier}`,
+            name: gameState.parent.weaponInventory[tier].name,
+            atk: gameState.parent.weaponInventory[tier].atk,
+            def: 0,
+            tier: tier
+        };
         closeInventory();
         updateUI();
         sonSpeech("우와 새 장비다!!");
@@ -289,16 +3603,150 @@ function equipWeapon(tier) {
     }
 }
 
-function closeInventory() { els.invModal.style.display = 'none'; }
+function equipSpecialWeapon(id) {
+    const w = gameState.parent.specialWeaponInventory?.[id];
+    if (!w || w.count <= 0) return;
+    w.count--;
+
+    // return previous weapon
+    if (gameState.son.equipment.weapon.id && gameState.son.equipment.weapon.id.startsWith('weapon_')) {
+        const tier = gameState.son.equipment.weapon.tier;
+        if (gameState.parent.weaponInventory?.[tier]) gameState.parent.weaponInventory[tier].count++;
+    } else if (gameState.son.equipment.weapon.id && gameState.parent.specialWeaponInventory?.[gameState.son.equipment.weapon.id]) {
+        gameState.parent.specialWeaponInventory[gameState.son.equipment.weapon.id].count++;
+    }
+
+    gameState.son.equipment.weapon = {
+        id: w.id,
+        name: w.name,
+        atk: w.atk,
+        def: 0,
+        tier: w.tier || 'B'
+    };
+    closeInventory();
+    updateUI();
+    sonSpeech("이 무기… 뭔가 다르다!");
+    showToast(`${w.name} 장착!`, 'gold');
+}
+window.equipSpecialWeapon = equipSpecialWeapon;
+
+function closeInventory() {
+    if (els.invModal) els.invModal.style.display = 'none';
+}
 window.closeInventory = closeInventory;
+
+function ensureUiLocks() {
+    if (!gameState.parent.uiLocks || typeof gameState.parent.uiLocks !== 'object') gameState.parent.uiLocks = {};
+    if (typeof gameState.parent.uiLocks.wardrobe !== 'boolean') gameState.parent.uiLocks.wardrobe = false;
+}
+
+function isWardrobeLocked() {
+    ensureUiLocks();
+    return !!gameState.parent.uiLocks.wardrobe;
+}
+
+function updateWardrobeUI() {
+    const weaponName = document.getElementById('wb-weapon-name');
+    const weaponStat = document.getElementById('wb-weapon-stat');
+    const helmetName = document.getElementById('wb-helmet-name');
+    const helmetStat = document.getElementById('wb-helmet-stat');
+    const armorName = document.getElementById('wb-armor-name');
+    const armorStat = document.getElementById('wb-armor-stat');
+    const bootsName = document.getElementById('wb-boots-name');
+    const bootsStat = document.getElementById('wb-boots-stat');
+    if (!weaponName || !helmetName || !armorName || !bootsName) return;
+
+    const w = gameState.son.equipment.weapon;
+    weaponName.innerText = w?.name || '-';
+    weaponStat.innerText = w ? `공+${w.atk}` : '';
+
+    const h = gameState.son.equipment.helmet;
+    helmetName.innerText = h?.name || '-';
+    helmetStat.innerText = h ? `방+${h.def}` : '';
+
+    const a = gameState.son.equipment.armor;
+    armorName.innerText = a?.name || '-';
+    armorStat.innerText = a ? `방+${a.def}` : '';
+
+    const b = gameState.son.equipment.boots;
+    bootsName.innerText = b?.name || '-';
+    bootsStat.innerText = b ? `방+${b.def}` : '';
+}
+
+function selectRoomView(roomId) {
+    if (!roomId || !els.roomViews?.[roomId]) return;
+    els.roomTabs.forEach(t => t.classList.toggle('active', t.getAttribute('data-room') === roomId));
+    Object.entries(els.roomViews).forEach(([id, el]) => el.classList.toggle('active', id === roomId));
+    updateUpgradeButtons(roomId);
+}
+
+function openWardrobe(focusSlot = null) {
+    if (gameState.son.state === 'ADVENTURING') {
+        showToast("아들이 모험 중이라 옷장을 열 수 없어요.", 'warning');
+        return;
+    }
+    ensureUiLocks();
+    gameState.parent.uiLocks.wardrobe = true;
+    if (typeof setMainView === 'function') setMainView('home');
+    selectRoomView('room-wardrobe');
+    updateWardrobeUI();
+
+    if (focusSlot) {
+        const el = document.querySelector(`[data-wslot=\"${focusSlot}\"]`);
+        if (el) {
+            el.style.outline = '3px solid rgba(59,130,246,0.45)';
+            el.style.outlineOffset = '2px';
+            setTimeout(() => {
+                el.style.outline = '';
+                el.style.outlineOffset = '';
+            }, 850);
+        }
+    }
+}
+window.openWardrobe = openWardrobe;
+
+function closeWardrobe() {
+    ensureUiLocks();
+    gameState.parent.uiLocks.wardrobe = false;
+    selectRoomView('room-bed');
+}
+window.closeWardrobe = closeWardrobe;
+
+function openWardrobePicker(slot) {
+    if (!slot) return;
+    openWardrobe();
+    openInventory(slot);
+}
+window.openWardrobePicker = openWardrobePicker;
+
+function unequipWeapon() {
+    const cur = gameState.son.equipment.weapon;
+    if (!cur || cur.name === '몽둥이') {
+        showToast("이미 기본 무기입니다.", 'info');
+        return;
+    }
+    // return current weapon
+    if (cur.id && cur.id.startsWith('weapon_')) {
+        const tier = cur.tier;
+        if (gameState.parent.weaponInventory?.[tier]) gameState.parent.weaponInventory[tier].count++;
+    } else if (cur.id && gameState.parent.specialWeaponInventory?.[cur.id]) {
+        gameState.parent.specialWeaponInventory[cur.id].count++;
+    }
+    gameState.son.equipment.weapon = { id: 'weapon_C', name: '몽둥이', atk: 1, def: 0, tier: 'C' };
+    showToast("무기를 해제했습니다.", 'info');
+    updateUI();
+}
+window.unequipWeapon = unequipWeapon;
 
 function placeItem(itemId) {
     if (gameState.parent.inventory[itemId].count > 0) {
         gameState.parent.inventory[itemId].count--;
         gameState.rooms[currentTargetRoom].placedItem = itemId;
         const slotEl = els.slots[currentTargetRoom];
-        slotEl.innerHTML = `<div>${gameState.parent.inventory[itemId].name.split(' ')[0]}</div>`;
-        slotEl.classList.add('filled');
+        if (slotEl) {
+            slotEl.innerHTML = `<div>${gameState.parent.inventory[itemId].name.split(' ')[0]}</div>`;
+            slotEl.classList.add('filled');
+        }
         closeInventory();
         updateUI();
         showToast("아이템 배치 완료!", 'success');
@@ -325,15 +3773,83 @@ function updateSynthesisUI() {
         div.innerHTML = html;
         els.weaponInventoryList.appendChild(div);
     });
+
+    // Special weapons (crafted milestones)
+    if (gameState.parent.specialWeaponInventory) {
+        const header = document.createElement('div');
+        header.style.cssText = 'margin-top:8px; font-size:0.75rem; color:#64748b; font-weight:900;';
+        header.innerText = '특별 무기';
+        els.weaponInventoryList.appendChild(header);
+        Object.values(gameState.parent.specialWeaponInventory).forEach(w => {
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:5px; background:white; border-radius:5px; border:1px solid #e2e8f0;';
+            div.innerHTML = `<span style="font-size:0.85rem">[★] ${w.name}: ${w.count}개</span><span style="font-size:0.7rem; color:#94a3b8">공+${w.atk}</span>`;
+            els.weaponInventoryList.appendChild(div);
+        });
+    }
 }
 window.synthesizeWeapon = function(currentTier, nextTier) {
     if (gameState.parent.weaponInventory[currentTier].count >= 3) {
         gameState.parent.weaponInventory[currentTier].count -= 3;
         gameState.parent.weaponInventory[nextTier].count++;
-        showToast(`[${nextTier}급] ${gameState.parent.weaponInventory[nextTier].name} 합성 성공!`, 'gold');
+
+        addSmithyXp(2);
+
+        // Byproducts (keeps synthesis meaningful without dismantling)
+        const byproductMap = {
+            'C>B': { iron_scrap: 1 },
+            'B>A': { iron_scrap: 2, arcane_dust: 1 },
+            'A>S': { iron_scrap: 4, arcane_dust: 2 }
+        };
+        const key = `${currentTier}>${nextTier}`;
+        const byp = { ...(byproductMap[key] || {}) };
+
+        // Smithy skill slightly improves byproducts over time
+        ensureSmithy();
+        const smithLv = gameState.parent.smithy.level;
+        const extraScrap = Math.floor((smithLv - 1) / 4);
+        const extraDust = Math.floor((smithLv - 1) / 6);
+        if (extraScrap > 0) byp.iron_scrap = (byp.iron_scrap || 0) + extraScrap;
+        if (extraDust > 0 && (byp.arcane_dust || 0) > 0) byp.arcane_dust = (byp.arcane_dust || 0) + extraDust;
+
+        const gained = [];
+        Object.entries(byp).forEach(([k, v]) => {
+            ensureLootKey(k);
+            gameState.parent.loot[k].count += v;
+            gained.push(`${gameState.parent.loot[k].name} x${v}`);
+        });
+
+        showToast(
+            `[${nextTier}급] ${gameState.parent.weaponInventory[nextTier].name} 합성 성공!${gained.length ? ` (+${gained.join(', ')})` : ''}`,
+            'gold'
+        );
         updateUI();
     }
 };
+
+function exchangeByproduct(fromKey, fromAmount, toKey, toAmount) {
+    ensureLootKey(fromKey);
+    ensureLootKey(toKey);
+    const need = Math.max(1, Math.floor(fromAmount));
+    const gain = Math.max(1, Math.floor(toAmount));
+    if (need <= 4) {
+        // "Pro exchange" rates are unlock-gated
+        if (!isSmithyUnlocked('exchange_pro')) {
+            showToast("🧱 숙련 교환은 대장간 숙련도 Lv.3부터 해금됩니다.", 'warning');
+            return;
+        }
+    }
+    if ((gameState.parent.loot[fromKey].count || 0) < need) {
+        showToast(`${gameState.parent.loot[fromKey].name} 부족! (${need}개 필요)`, 'error');
+        return;
+    }
+    gameState.parent.loot[fromKey].count -= need;
+    gameState.parent.loot[toKey].count += gain;
+    addSmithyXp(1);
+    showToast(`${gameState.parent.loot[fromKey].name} ${need}개 → ${gameState.parent.loot[toKey].name} ${gain}개`, 'success');
+    updateUI();
+}
+window.exchangeByproduct = exchangeByproduct;
 
 // ============================================================
 // #3 — Furniture Upgrade System
@@ -345,12 +3861,17 @@ function upgradeFurniture(type) {
         showToast("이미 최고 레벨입니다!", 'warning');
         return;
     }
+    const prevEffect = getUpgradeEffectValue(type, currentLv);
     const cost = data.costs[currentLv]; // cost for NEXT level
     if (gameState.parent.gold >= cost) {
         gameState.parent.gold -= cost;
         gameState.parent.upgrades[type]++;
         const newLv = gameState.parent.upgrades[type];
-        showToast(`${data.emoji} ${data.names[newLv]} (으)로 업그레이드! Lv.${newLv}`, 'gold');
+        const nextEffect = getUpgradeEffectValue(type, newLv);
+        const slotTitle = type === 'bed' ? '침대' : type === 'table' ? '식탁' : type === 'desk' ? '책상' : '훈련장';
+        const modelName = getFurnitureModel(type)?.name || '기본';
+        showToast(`${data.emoji} ${slotTitle} 강화 Lv.${newLv} (모델: ${modelName})`, 'gold');
+        showToast(`효과: ${getUpgradeEffectLabel(type, prevEffect)} → ${getUpgradeEffectLabel(type, nextEffect)}`, 'info');
         updateUI();
         updateUpgradeButtons(getActiveRoom());
     } else {
@@ -382,7 +3903,10 @@ function updateUpgradeButtons(roomId) {
     const data = upgradeData[type];
     const lv = gameState.parent.upgrades[type];
     if (lv < data.costs.length - 1) {
-        btn.innerText = `⬆️ ${data.names[lv + 1]} 업그레이드 (${data.costs[lv]}G)`;
+        const nextLv = lv + 1;
+        const effectPreview = getUpgradeEffectPreview(type, lv, nextLv);
+        const modelName = getFurnitureModel(type)?.name || '기본';
+        btn.innerHTML = `⬆️ 강화 Lv.${nextLv} (${data.costs[lv]}G)<span class="up-sub">모델: ${modelName} · 효과: ${effectPreview}</span>`;
         btn.style.display = 'block';
     }
 }
@@ -402,7 +3926,7 @@ const questDB = [
 function triggerRandomQuest() {
     if (gameState.son.quest || Math.random() > 0.1) return;
     const q = questDB[Math.floor(Math.random() * questDB.length)];
-    gameState.son.quest = { ...q, active: true };
+    gameState.son.quest = { ...q, active: true, context: 'home' };
     sonSpeech("엄마!! 부탁이 있어요!");
     updateUI();
 }
@@ -411,10 +3935,17 @@ function handleQuestTick() {
     if (!gameState.son.quest) return;
     gameState.son.quest.timer--;
     if (gameState.son.quest.timer <= 0) {
-        sonSpeech("치.. 엄마 미워!");
-        addMail("부탁 거절", "아들의 부탁을 들어주지 않아 ⚡반항심이 올랐습니다.");
-        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 15);
-        gameState.son.affinity.affection = Math.max(0, gameState.son.affinity.affection - 5);
+        const ctx = gameState.son.quest.context || 'home';
+        if (ctx === 'adventure') {
+            addMail("📵 연락 실패", "모험 중 연락을 놓쳤습니다. 아들이 서운해합니다.");
+            gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 8);
+            gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 3);
+        } else {
+            sonSpeech("치.. 엄마 미워!");
+            addMail("부탁 거절", "아들의 부탁을 들어주지 않아 ⚡반항심이 올랐습니다.");
+            gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 15);
+            gameState.son.affinity.affection = Math.max(0, gameState.son.affinity.affection - 5);
+        }
         closeQuestModal();
         gameState.son.quest = null;
     }
@@ -485,6 +4016,7 @@ function closeQuestModal() { els.questModal.style.display = 'none'; }
 
 // --- Quest helpers ---
 function checkQuestFulfillable(q) {
+    const ctx = q.context || 'home';
     if (q.type === 'money') {
         if (gameState.parent.gold >= q.reqGold) {
             return { possible: true, label: `들어주기 (${q.reqGold}G)` };
@@ -496,13 +4028,13 @@ function checkQuestFulfillable(q) {
         if (kitchenItems.length > 0) {
             return { possible: true, label: `${gameState.parent.inventory[kitchenItems[0]].name} 주기` };
         }
-        if (gameState.rooms['room-table'].placedItem) {
+        if (ctx !== 'adventure' && gameState.rooms['room-table'].placedItem) {
             return { possible: true, label: '식탁 위 음식 주기' };
         }
     } else if (q.type === 'equipment') {
         // Check if we have a weapon better than current
         const tiers = ['C', 'B', 'A', 'S'];
-        const currentIdx = tiers.indexOf(gameState.son.weapon.tier);
+        const currentIdx = tiers.indexOf(gameState.son.equipment.weapon.tier);
         for (let i = currentIdx + 1; i < tiers.length; i++) {
             if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
                 return { possible: true, label: `${gameState.parent.weaponInventory[tiers[i]].name} 장착해주기` };
@@ -523,7 +4055,7 @@ function getExtendTime(q) {
 
 function getQuestHint(q) {
     if (q.type === 'food') {
-        return '💡 <b>힌트:</b> 상점에서 스테이크를 사거나, 농사로 재료를 모아 요리하세요!';
+        return '💡 <b>힌트:</b> 마을에서 요리 재료를 사거나, 텃밭에서 수확해서 주방에서 요리하세요!';
     } else if (q.type === 'equipment') {
         return '💡 <b>힌트:</b> 대장간에서 무기를 뽑거나 합성하세요!';
     } else if (q.type === 'money') {
@@ -540,7 +4072,9 @@ function extendQuest() {
     q.timer += bonus;
     sonSpeech("알겠어요.. 빨리요 엄마!");
     showToast(`⏳ 아들이 기다려줍니다! +${bonus}초`, 'info');
-    gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2); // slight trust cost
+    const ctx = q.context || 'home';
+    const trustCost = ctx === 'adventure' ? 1 : 2;
+    gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - trustCost); // slight trust cost
     closeQuestModal();
     updateUI();
 }
@@ -550,6 +4084,7 @@ function acceptQuest() {
     if (!q) return;
     let success = false;
     let bonusAffection = 10;
+    const ctx = q.context || 'home';
 
     if (q.type === 'money' && gameState.parent.gold >= q.reqGold) {
         gameState.parent.gold -= q.reqGold;
@@ -561,23 +4096,24 @@ function acceptQuest() {
         if (kitchenItems.length > 0) {
             gameState.parent.inventory[kitchenItems[0]].count--;
             success = true;
-        } else if (gameState.rooms['room-table'].placedItem) {
+        } else if (ctx !== 'adventure' && gameState.rooms['room-table'].placedItem) {
             gameState.rooms['room-table'].placedItem = null;
-            els.slots['room-table'].innerHTML = `<span class="slot-label">빈 접시</span>➕`;
-            els.slots['room-table'].classList.remove('filled');
+            updateKitchenSlotUI();
             success = true;
         }
     } else if (q.type === 'equipment') {
         const tiers = ['C', 'B', 'A', 'S'];
-        const currentIdx = tiers.indexOf(gameState.son.weapon.tier);
+        const currentIdx = tiers.indexOf(gameState.son.equipment.weapon.tier);
         for (let i = currentIdx + 1; i < tiers.length; i++) {
             if (gameState.parent.weaponInventory[tiers[i]].count > 0) {
                 gameState.parent.weaponInventory[tiers[i]].count--;
-                const oldTier = gameState.son.weapon.tier;
+                const oldTier = gameState.son.equipment.weapon.tier;
                 gameState.parent.weaponInventory[oldTier].count++;
-                gameState.son.weapon = {
+                gameState.son.equipment.weapon = {
+                    id: `weapon_${tiers[i]}`,
                     name: gameState.parent.weaponInventory[tiers[i]].name,
                     atk: gameState.parent.weaponInventory[tiers[i]].atk,
+                    def: 0,
                     tier: tiers[i]
                 };
                 bonusAffection = 15;
@@ -591,11 +4127,12 @@ function acceptQuest() {
     }
 
     if (success) {
-        sonSpeech("우와! 엄마 최고 사랑해요!!");
+        if (ctx !== 'adventure') sonSpeech("우와! 엄마 최고 사랑해요!!");
         gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + bonusAffection);
         gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 5);
         gameState.son.affinity.rebellion = Math.max(0, gameState.son.affinity.rebellion - 10);
-        showToast("아들의 부탁을 들어줬습니다! ❤️", 'success');
+        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) + 1, 0, 100);
+        showToast(ctx === 'adventure' ? "모험 중 아들을 도왔습니다! 💌" : "아들의 부탁을 들어줬습니다! ❤️", 'success');
         closeQuestModal();
         gameState.son.quest = null;
         updateUI();
@@ -605,9 +4142,20 @@ function acceptQuest() {
 }
 
 function rejectQuest() {
-    sonSpeech("엄마 미워!!");
-    gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 10);
-    showToast("아들이 실망했습니다... ⚡반항심 +10", 'warning');
+    const q = gameState.son.quest;
+    const ctx = q?.context || 'home';
+    if (ctx === 'adventure') {
+        addMail("📵 연락 종료", "모험 중 도움을 못 받았다고 아들이 투덜댑니다.");
+        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 6);
+        gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2);
+        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
+        showToast("모험 중 연락을 거절했습니다.", 'warning');
+    } else {
+        sonSpeech("엄마 미워!!");
+        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 10);
+        gameState.son.personality.morality = clampInt((gameState.son.personality.morality ?? 50) - 1, 0, 100);
+        showToast("아들이 실망했습니다... ⚡반항심 +10", 'warning');
+    }
     closeQuestModal();
     gameState.son.quest = null;
     updateUI();
@@ -619,18 +4167,346 @@ window.rejectQuest = rejectQuest;
 // ============================================================
 function updateUI() {
     try {
+        ensureFurnitureState();
+        ensureSonGrowthState();
+        ensureKitchenState();
+        ensureShopState();
+        ensureLibraryState();
+        ensureWorkState();
+        ensureSupportPinState();
+        applySmithyTabUI();
+        applyShopTabUI();
+        applySonTabUI();
         els.gold.innerText = gameState.parent.gold;
         els.sonLevel.innerText = `(Lv. ${gameState.son.level})`;
-        els.sonWeapon.innerText = `${gameState.son.weapon.name} (공+${gameState.son.weapon.atk})`;
-        els.sonWeapon.className = `weapon-badge tier-${gameState.son.weapon.tier}`;
+        els.sonWeapon.innerText = `${gameState.son.equipment.weapon.name} (공+${gameState.son.equipment.weapon.atk})`;
+        els.sonWeapon.className = `weapon-badge tier-${gameState.son.equipment.weapon.tier}`;
         els.barHp.style.width = `${(gameState.son.hp / gameState.son.maxHp) * 100}%`;
         els.barHunger.style.width = `${(gameState.son.hunger / gameState.son.maxHunger) * 100}%`;
         els.barExp.style.width = `${(gameState.son.exp / gameState.son.maxExp) * 100}%`;
+        updateKitchenSlotUI();
+        updateDeskSlotUI();
+        renderBookstoreUI();
+        (function updateWorkUI() {
+            const w = gameState.parent.work;
+            const lvEl = document.getElementById('work-lv');
+            const xpTextEl = document.getElementById('work-xp-text');
+            const xpBarEl = document.getElementById('work-xp-bar');
+            const eTextEl = document.getElementById('work-energy-text');
+            const eBarEl = document.getElementById('work-energy-bar');
+            const eNextEl = document.getElementById('work-energy-next');
+            if (lvEl) lvEl.innerText = String(w.level);
+            const need = getWorkXpToNext(w.level);
+            const xp = w.xp || 0;
+            const xpPct = need > 0 ? Math.max(0, Math.min(100, Math.round((xp / need) * 100))) : 0;
+            if (xpTextEl) xpTextEl.innerText = `${xp}/${need}`;
+            if (xpBarEl) xpBarEl.style.width = `${xpPct}%`;
+            if (eTextEl) eTextEl.innerText = `${w.energy}/${w.maxEnergy}`;
+            const ePct = w.maxEnergy > 0 ? Math.max(0, Math.min(100, Math.round((w.energy / w.maxEnergy) * 100))) : 0;
+            if (eBarEl) eBarEl.style.width = `${ePct}%`;
+            if (eNextEl) eNextEl.innerText = (w.energy >= w.maxEnergy) ? '가득' : formatMmSs(w.energyTimer || 0);
+
+            if (els.btnWork) {
+                const reward = getWorkGoldReward(w.level);
+                els.btnWork.disabled = w.energy <= 0;
+                els.btnWork.innerText = `🪡 바느질 하기 (+${reward}G · 에너지 -1)`;
+            }
+        })();
+
+        // Son profile panel
+        const cpEl = document.getElementById('son-cp');
+        if (cpEl) cpEl.innerText = getSonCombatPower();
+        const lv2 = document.getElementById('son-level-2');
+        if (lv2) lv2.innerText = gameState.son.level;
+        const hp2 = document.getElementById('son-hp-2');
+        const hpMax2 = document.getElementById('son-hpmax-2');
+        const hu2 = document.getElementById('son-hunger-2');
+        const huMax2 = document.getElementById('son-hungermax-2');
+        if (hp2) hp2.innerText = Math.floor(gameState.son.hp);
+        if (hpMax2) hpMax2.innerText = gameState.son.maxHp;
+        if (hu2) hu2.innerText = Math.floor(gameState.son.hunger);
+        if (huMax2) huMax2.innerText = gameState.son.maxHunger;
+
+        const atkEl = document.getElementById('son-atk-total');
+        const defEl = document.getElementById('son-def-total');
+        const eqAtkEl = document.getElementById('son-eq-atk');
+        const eqDefEl = document.getElementById('son-eq-def');
+        if (atkEl) atkEl.innerText = String(getSonAtk());
+        if (defEl) defEl.innerText = String(getSonDef());
+        if (eqAtkEl) eqAtkEl.innerText = String(getEquipAtkSum());
+        if (eqDefEl) eqDefEl.innerText = String(getEquipDefSum());
+
+        const injuryEl = document.getElementById('son-injury');
+        const injuryDescEl = document.getElementById('son-injury-desc');
+        const hospitalBtn = document.getElementById('btn-hospital');
+        if (injuryEl) {
+            if (!gameState.son.injury) {
+                injuryEl.style.color = '#10b981';
+                injuryEl.innerText = '🩹 건강';
+                if (injuryDescEl) injuryDescEl.innerText = '';
+                if (hospitalBtn) hospitalBtn.style.display = 'none';
+            } else {
+                injuryEl.style.color = '#ef4444';
+                injuryEl.innerText = `🩹 부상: ${gameState.son.injury.label}`;
+                if (injuryDescEl) {
+                    const rem = Math.max(0, Math.floor(gameState.son.injury.remaining || 0));
+                    const m = Math.floor(rem / 60);
+                    const s = rem % 60;
+                    const riskPct = Math.round((gameState.son.injury.riskMul || 1) * 100);
+                    injuryDescEl.innerText = `남은 시간 ${m}:${String(s).padStart(2, '0')} · 전투력 ${Math.round((gameState.son.injury.cpMul || 1) * 100)}% · 부상 위험 ${riskPct}%`;
+                }
+                if (hospitalBtn) hospitalBtn.style.display = 'inline-flex';
+            }
+        }
+
+        const eqWeaponEl = document.getElementById('eq-weapon');
+        const eqHelmetEl = document.getElementById('eq-helmet');
+        const eqArmorEl = document.getElementById('eq-armor');
+        const eqBootsEl = document.getElementById('eq-boots');
+        if (eqWeaponEl) eqWeaponEl.innerText = `${gameState.son.equipment.weapon.name} (공+${gameState.son.equipment.weapon.atk})`;
+        if (eqHelmetEl) eqHelmetEl.innerText = `${gameState.son.equipment.helmet.name} (방+${gameState.son.equipment.helmet.def})`;
+        if (eqArmorEl) eqArmorEl.innerText = `${gameState.son.equipment.armor.name} (방+${gameState.son.equipment.armor.def})`;
+        if (eqBootsEl) eqBootsEl.innerText = `${gameState.son.equipment.boots.name} (방+${gameState.son.equipment.boots.def})`;
+        updateWardrobeUI();
+
+        const braveryFill = document.getElementById('trait-bravery');
+        const diligenceFill = document.getElementById('trait-diligence');
+        if (braveryFill) braveryFill.style.width = `${clampInt(gameState.son.personality.bravery, 0, 100)}%`;
+        if (diligenceFill) diligenceFill.style.width = `${clampInt(gameState.son.personality.diligence, 0, 100)}%`;
+        const moralityFill = document.getElementById('trait-morality');
+        const flexFill = document.getElementById('trait-flexibility');
+        if (moralityFill) moralityFill.style.width = `${clampInt(gameState.son.personality.morality ?? 50, 0, 100)}%`;
+        if (flexFill) flexFill.style.width = `${clampInt(gameState.son.personality.flexibility ?? 50, 0, 100)}%`;
+        const traitSummaryEl = document.getElementById('trait-summary');
+        if (traitSummaryEl) {
+            const t = getTraitSummary();
+            traitSummaryEl.innerHTML = `<b>${t.short}</b><br>${t.line}`;
+        }
+        const traitCodeEl = document.getElementById('trait-code');
+        if (traitCodeEl) {
+            const code = getPersonalityCode();
+            traitCodeEl.innerText = `성격 코드(4글자): ${code} (MBTI처럼 “느낌”만)`;
+        }
+
+        // Job & training stats (son panel)
+        const jobEl = document.getElementById('son-job');
+        const jobSubEl = document.getElementById('son-job-sub');
+        if (jobEl || jobSubEl) {
+            const j = getJobInfo();
+            if (jobEl) jobEl.innerText = j.title;
+            if (jobSubEl) jobSubEl.innerHTML = j.subHtml || '';
+        }
+        const s = gameState.son.stats || {};
+        const setNum = (id, v) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = String(v);
+        };
+        setNum('stat-physatk', s.physAtk || 0);
+        setNum('stat-magatk', s.magicAtk || 0);
+        setNum('stat-magres', s.magicRes || 0);
+        setNum('stat-agi', s.agility || 0);
+        setNum('stat-acc', s.accuracy || 0);
+
+        // Training ground type hint (home room)
+        const dummyTypeEl = document.getElementById('dummy-training-type');
+        if (dummyTypeEl) {
+            const t = getTrainingTypeFromDummyModel();
+            const label =
+                t === 'strength' ? '💪 근력' :
+                t === 'magic' ? '✨ 마법' :
+                t === 'archery' ? '🏹 사격' :
+                t === 'legend' ? '🌟 맞춤(전설)' :
+                '🎲 랜덤';
+            dummyTypeEl.innerText = `현재 훈련: ${label}`;
+        }
+
+        // Next goal preview (son & mail panels)
+        const nextGoalEl = document.getElementById('next-goal');
+        const nextGoalSubEl = document.getElementById('next-goal-sub');
+        if (nextGoalEl) {
+            const plan = planAdventureGoal();
+            const label = `${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}`;
+            const diffName = (difficultyData[plan.diffKey] || difficultyData.normal).name;
+            const diffLabel = `${diffName} (아들 선택)`;
+            const score = plan.cp / plan.zone.recCP;
+            const riskHint = score >= 1.1 ? '안정적' : score >= 0.9 ? '도전적' : '무리할 수도…';
+            if (nextGoalEl) nextGoalEl.innerText = label;
+            const sub = `${diffLabel} · 권장CP ${plan.zone.recCP} · 내 CP ${plan.cp} · ${riskHint}`;
+            if (nextGoalSubEl) nextGoalSubEl.innerText = sub;
+
+            // Why (plan reasons)
+            const reasonEl = document.getElementById('goal-reason');
+            if (reasonEl) {
+                const why = describePlanReasons(plan);
+                reasonEl.innerHTML = why ? `<b>왜 이렇게 정했을까?</b><br>${why}` : '';
+            }
+
+            // Support pin + suggestions
+            renderSupportPinUI(plan);
+            renderSupportSuggestionsUI(plan);
+
+            // Long-term goals (condensed)
+            const metaEl = document.getElementById('long-goals-meta');
+            const listEl = document.getElementById('long-goals');
+            if (metaEl) metaEl.innerText = getLongTermGoalsMeta();
+            if (listEl) listEl.innerHTML = renderLongTermGoals(plan.zone.id);
+
+            // Last choice feedback
+            const lastChoiceEl = document.getElementById('last-choice');
+            if (lastChoiceEl) {
+                const lc = gameState.son.lastChoice;
+                if (!lc) {
+                    lastChoiceEl.innerText = '';
+                } else {
+                    const labelMap = { RESTING: '🧸 휴식', TRAINING: '⚔️ 훈련', STUDYING: '📚 공부', ADVENTURE: '🏃‍♂️ 모험' };
+                    const ago = Number.isFinite(lc.tick) ? Math.max(0, (gameState.worldTick || 0) - lc.tick) : null;
+                    const when = Number.isFinite(ago) ? `${ago}초 전` : '';
+                    const why = (lc.reasons || []).slice(0, 2).join(' · ');
+                    lastChoiceEl.innerText = `최근 선택: ${labelMap[lc.pick] || lc.pick}${when ? ` (${when})` : ''}${why ? ` — ${why}` : ''}`;
+                }
+            }
+
+            // World codex
+            renderWorldCodexUI(plan.zone.id);
+        }
 
         // Affinity
         els.affTrust.innerText = gameState.son.affinity.trust;
         els.affAffection.innerText = gameState.son.affinity.affection;
         els.affRebellion.innerText = gameState.son.affinity.rebellion;
+
+        // Mail badge (mailbox button)
+        if (els.mailBadge) {
+            const unread = Math.max(0, gameState.parent.mailUnread || 0);
+            if (unread > 0) {
+                els.mailBadge.style.display = 'inline-flex';
+                els.mailBadge.innerText = unread > 9 ? '9+' : String(unread);
+            } else {
+                els.mailBadge.style.display = 'none';
+                els.mailBadge.innerText = '';
+            }
+        }
+
+        // Smith byproducts
+        const ironScrapEl = document.getElementById('cnt-iron-scrap');
+        const arcaneDustEl = document.getElementById('cnt-arcane-dust');
+        if (ironScrapEl) {
+            ensureLootKey('iron_scrap');
+            ironScrapEl.innerText = gameState.parent.loot.iron_scrap.count || 0;
+        }
+        if (arcaneDustEl) {
+            ensureLootKey('arcane_dust');
+            arcaneDustEl.innerText = gameState.parent.loot.arcane_dust.count || 0;
+        }
+
+        // Town hub badges ("지금 할 일" 안내)
+        (function updateTownBadges() {
+            const setBadge = (badgeId, text, type) => {
+                const el = document.getElementById(badgeId);
+                if (!el) return;
+                const card = el.closest('.town-card');
+                if (!text) {
+                    el.style.display = 'none';
+                    el.innerText = '';
+                    el.className = 'town-card-badge';
+                    if (card) card.classList.remove('has-action');
+                    return;
+                }
+                el.style.display = 'inline-flex';
+                el.innerText = text;
+                el.className = `town-card-badge ${type || ''}`.trim();
+                if (card) card.classList.add('has-action');
+            };
+
+            // Life: now only "work" in town (farm/cooking moved to home)
+            setBadge('badge-life', '', '');
+
+            // Craft: count craftable actions
+            let craftable = 0;
+            for (const slot of (craftConfig?.slots || [])) {
+                for (let tier = 1; tier <= (craftConfig?.tierCount || 0); tier++) {
+                    const r = buildGearRecipe(slot, tier);
+                    const inv = gameState.parent.gearInventory?.[slot] || {};
+                    const hasPrev = !r.needsGear || ((inv[r.needsGear.id]?.count || 0) >= (r.needsGear.count || 1));
+                    if (hasPrev && canCraftNeeds(r.needs)) craftable += 1;
+                }
+            }
+            for (const m of (craftConfig?.milestoneWeapons || [])) {
+                if (canCraftNeeds(m.needs)) craftable += 1;
+            }
+            const craftableHint = craftable;
+
+            // Smithy badge: quick actions
+            ensureLootKey('iron_scrap');
+            ensureLootKey('arcane_dust');
+            const synthPossible = (() => {
+                const inv = gameState.parent.weaponInventory || {};
+                const tiers = Object.keys(inv);
+                let c = 0;
+                for (let i = 0; i < tiers.length - 1; i++) {
+                    const t = tiers[i];
+                    if ((inv[t]?.count || 0) >= 3) c += 1;
+                }
+                return c;
+            })();
+            const canTemper = isSmithyUnlocked('temper') && (gameState.parent.loot.iron_scrap.count || 0) >= 8 && (gameState.parent.loot.arcane_dust.count || 0) >= 2;
+            const canOrder = isSmithyUnlocked('special_order') && gameState.parent.gold >= 6000 && (gameState.parent.loot.arcane_dust.count || 0) >= 6;
+            const canPremium = isSmithyUnlocked('premium_gacha') && gameState.parent.gold >= 2500;
+            if (canOrder) setBadge('badge-smith', '주문', 'warn');
+            else if (canTemper) setBadge('badge-smith', '정련', 'info');
+            else if (craftableHint > 0) setBadge('badge-smith', `제작 ${craftableHint > 9 ? '9+' : craftableHint}`, 'info');
+            else if (synthPossible > 0) setBadge('badge-smith', `합성 ${synthPossible > 9 ? '9+' : synthPossible}`, 'good');
+            else if (canPremium) setBadge('badge-smith', '고급', 'info');
+            else setBadge('badge-smith', '', '');
+
+            // Shop badge: keep minimal (no forced prompts)
+            setBadge('badge-shop', '', '');
+
+            // Adventure card removed (mailbox is a separate button)
+        })();
+
+        // Smithy level
+        ensureSmithy();
+        const smithLvEl = document.getElementById('smith-lv');
+        const smithXpTextEl = document.getElementById('smith-xp-text');
+        const smithXpBarEl = document.getElementById('smith-xp-bar');
+        const smithBonusEl = document.getElementById('smith-bonus-text');
+        const smithBuffEl = document.getElementById('smith-buff-text');
+        const unlockExchangeEl = document.getElementById('unlock-exchange-state');
+        const unlockPremiumEl = document.getElementById('unlock-premium-state');
+        const unlockTemperEl = document.getElementById('unlock-temper-state');
+        const unlockOrderEl = document.getElementById('unlock-order-state');
+        if (smithLvEl) smithLvEl.innerText = gameState.parent.smithy.level;
+        const need = getSmithyXpToNext(gameState.parent.smithy.level);
+        const xp = gameState.parent.smithy.xp || 0;
+        const pct = need > 0 ? Math.max(0, Math.min(100, Math.round((xp / need) * 100))) : 0;
+        if (smithXpTextEl) smithXpTextEl.innerText = `${xp}/${need}`;
+        if (smithXpBarEl) smithXpBarEl.style.width = `${pct}%`;
+        if (smithBonusEl) smithBonusEl.innerText = `고급 무기 확률 보정 +${Math.round(getSmithyQualityBonus(gameState.parent.smithy.level) * 100)}%`;
+        if (smithBuffEl) {
+            const buff = gameState.parent.smithy.buff;
+            if (buff?.type === 'lucky' && (buff.pulls || 0) > 0) {
+                smithBuffEl.innerText = `✨ 정련 효과: 다음 뽑기 ${buff.pulls}회`;
+            } else {
+                smithBuffEl.innerText = '';
+            }
+        }
+
+        const setUnlockText = (el, id) => {
+            if (!el) return;
+            const def = smithyUnlocks[id];
+            if (!def) return;
+            const ok = isSmithyUnlocked(id);
+            el.style.color = ok ? '#10b981' : '#94a3b8';
+            el.innerText = ok ? '✅ 해금됨' : `Lv.${def.level} 필요`;
+        };
+        setUnlockText(unlockExchangeEl, 'exchange_pro');
+        setUnlockText(unlockPremiumEl, 'premium_gacha');
+        setUnlockText(unlockTemperEl, 'temper');
+        setUnlockText(unlockOrderEl, 'special_order');
+
+        // Enable/disable smithy actions based on unlocks + busy state
+        setSmithyBusy(gameState.parent.smithy.isBusy);
 
         // Quest Alert
         if (gameState.son.quest) {
@@ -638,8 +4514,15 @@ function updateUI() {
             els.questTimer.innerText = gameState.son.quest.timer;
             // Update banner text to show quest type
             const q = gameState.son.quest;
-            const questIcons = { money: '💰', food: '🍖', equipment: '⚔️', attention: '🤗' };
-            els.questAlert.innerHTML = `${questIcons[q.type] || '❗'} 아들의 부탁이 있습니다! (남은 시간: <span id="quest-timer">${q.timer}</span>초)${q.extended ? ' <span style="font-size:0.75rem;">⏳연장됨</span>' : ''}`;
+            const questIcons = {
+                money: '💰',
+                food: '🍖',
+                equipment: '⚔️',
+                attention: '🤗'
+            };
+            const ctx = q.context || 'home';
+            const label = ctx === 'adventure' ? '모험 중 연락이 왔습니다!' : '아들의 부탁이 있습니다!';
+            els.questAlert.innerHTML = `${questIcons[q.type] || '❗'} ${label} (남은 시간: <span id="quest-timer">${q.timer}</span>초)${q.extended ? ' <span style="font-size:0.75rem;">⏳연장됨</span>' : ''}`;
             if (els.questModal && els.questModal.style.display === 'flex' && els.questModalTimer) {
                 els.questModalTimer.innerText = gameState.son.quest.timer;
             }
@@ -656,30 +4539,65 @@ function updateUI() {
             }
         });
 
-        // Son state label
-        if (els.sonStateLabel) {
-            const shortStates = {
-                'SLEEPING': '💤 수면 중...',
-                'EATING': '🍖 식사 중...',
-                'TRAINING': '⚔️ 훈련 중...',
-                'STUDYING': '📚 공부 중...',
-                'ADVENTURING': '🏃‍♂️ 모험 중!',
-                'IDLE': '대기 중'
-            };
-            els.sonStateLabel.innerText = shortStates[gameState.son.state] || '대기 중';
-        }
+	        // Son state label
+	        if (els.sonStateLabel) {
+	            const shortStates = {
+	                'SLEEPING': '💤 수면 중...',
+	                'EATING': '🍖 식사 중...',
+	                'TRAINING': '⚔️ 훈련 중...',
+	                'STUDYING': '📚 공부 중...',
+	                'RESTING': '🧸 휴식 중...',
+	                'ADVENTURING': '🏃‍♂️ 모험 중!',
+	                'IDLE': '대기 중'
+	            };
+	            els.sonStateLabel.innerText = shortStates[gameState.son.state] || '대기 중';
+	        }
 
-        // Furniture levels
+        // Pixel son sprite swap (if assets exist)
+        updateSonPixelSprite();
+
+        // Furniture levels + models
         ['bed', 'desk', 'table', 'dummy'].forEach(t => {
             const el = document.getElementById(`lvl-${t}`);
             if (el) el.innerText = gameState.parent.upgrades[t];
+            const modelEl = document.getElementById(`model-${t}`);
+            if (modelEl) {
+                const m = getFurnitureModel(t);
+                modelEl.innerText = `🔁 ${m.name}`;
+                modelEl.title = `${m.name} (클릭해서 교체)`;
+            }
         });
 
         // Adventure view toggle
-        if (gameState.son.state === 'ADVENTURING') {
-            if (els.adventureView) els.adventureView.classList.add('active');
-        } else {
-            if (els.adventureView) els.adventureView.classList.remove('active');
+        // 기본은 실황 비공개(걱정/반가움 강화): 집 화면 유지
+        if (els.adventureView) els.adventureView.classList.remove('active');
+
+        // Son info: adventure status
+        const advInfoEl = document.getElementById('son-adventure-info');
+        const advSubEl = document.getElementById('son-adventure-sub');
+        if (advInfoEl && advSubEl) {
+            if (gameState.son.state === 'ADVENTURING' && gameState.son.adventure) {
+                const rem = Math.max(0, (gameState.son.adventure.totalTicks || 0) - (gameState.son.adventure.ticks || 0));
+                const range = etaRangeFromRemaining(rem);
+                const lastAgo = Math.max(0, (gameState.son.adventure.ticks || 0) - (gameState.son.adventure.lastContactTick || 0));
+                advInfoEl.innerText = `🏃‍♂️ 외출 중 · 예상 귀환 ${formatMmSs(range.min)}~${formatMmSs(range.max)}`;
+                advSubEl.innerText = `마지막 소식: ${formatLastContact(lastAgo)}`;
+            } else {
+                advInfoEl.innerText = '🏠 집에 있어요';
+                advSubEl.innerText = '배고프거나 피곤하면 엄마를 찾을 거예요.';
+            }
+        }
+
+        // Next adventure buff info
+        if (els.buffInfo) {
+            const b = gameState.son.nextAdventureBuff;
+            if (b) {
+                els.buffInfo.style.display = 'block';
+                els.buffInfo.innerText = `✨ 다음 모험 버프: ${describeNextAdventureBuff(b)}`;
+            } else {
+                els.buffInfo.style.display = 'none';
+                els.buffInfo.innerText = '';
+            }
         }
 
         // Refresh sub-UIs
@@ -687,6 +4605,9 @@ function updateUI() {
         updateUpgradeButtons(getActiveRoom());
         updateFarmUI();
         updateCookUI();
+        updateCraftUI();
+        renderFurnitureShop();
+        updateFurnitureShopUI();
     } catch (e) {
         console.error("CRASH IN updateUI:", e);
     }
@@ -711,59 +4632,199 @@ els.sprite.addEventListener('click', () => {
 });
 
 function addMail(title, text, isGold = false) {
-    const li = document.createElement('li');
-    li.className = 'mail-item';
-    li.style.cssText = 'padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:6px;';
-    li.innerHTML = `<strong style="color: ${isGold ? '#eab308' : '#334155'}">${title}</strong><br><span style="font-size: 0.85rem">${text}</span>`;
-    els.mailList.prepend(li);
-    if (els.mailList.children.length > 15) els.mailList.removeChild(els.mailList.lastChild);
+    if (!gameState.parent.mailLog || !Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
+    gameState.parent.mailLog.unshift({
+        title,
+        text,
+        isGold: !!isGold,
+        ts: Date.now()
+    });
+    if (gameState.parent.mailLog.length > 10) gameState.parent.mailLog = gameState.parent.mailLog.slice(0, 10);
+    const mailboxOpen = !!(els.mailboxModal && els.mailboxModal.style.display === 'flex');
+    if (!mailboxOpen) {
+        gameState.parent.mailUnread = Math.max(0, (gameState.parent.mailUnread || 0) + 1);
+    }
+    renderMailbox();
+    updateUI();
 }
+
+function clearMailUnread() {
+    gameState.parent.mailUnread = 0;
+}
+
+function renderMailbox() {
+    if (!els.mailList) return;
+    if (!gameState.parent.mailLog || !Array.isArray(gameState.parent.mailLog)) gameState.parent.mailLog = [];
+    const log = gameState.parent.mailLog;
+    if (log.length === 0) {
+        els.mailList.innerHTML = `<li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">📮 아직 도착한 편지가 없습니다.</li>`;
+        return;
+    }
+    els.mailList.innerHTML = log.map(m => {
+        const color = m.isGold ? '#eab308' : '#334155';
+        return `<li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:6px;">
+            <strong style="color:${color}">${m.title}</strong><br>
+            <span style="font-size:0.85rem">${m.text}</span>
+        </li>`;
+    }).join('');
+}
+
+function openMailbox() {
+    if (els.mailboxModal) els.mailboxModal.style.display = 'flex';
+    clearMailUnread();
+    renderMailbox();
+    updateUI();
+}
+window.openMailbox = openMailbox;
+
+function closeMailbox() {
+    if (els.mailboxModal) els.mailboxModal.style.display = 'none';
+}
+window.closeMailbox = closeMailbox;
+
+if (els.mailboxModal) {
+    els.mailboxModal.addEventListener('click', (e) => {
+        if (e.target === els.mailboxModal) closeMailbox();
+    });
+}
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (els.mailboxModal && els.mailboxModal.style.display === 'flex') closeMailbox();
+});
 
 // ============================================================
 // #4 — Dynamic Adventure with Live View + Loot + Encourage
 // ============================================================
 let adventureInterval = null;
-
 function startAdventure() {
     gameState.son.state = 'ADVENTURING';
     gameState.son.adventureEncouraged = false;
     if (els.sprite) els.sprite.style.display = 'none';
     if (els.btnEncourage) els.btnEncourage.disabled = false;
 
-    const cp = gameState.son.level * gameState.son.weapon.atk;
-    addMail("🏃‍♂️ 외출", `아들이 모험을 떠났습니다! (전투력: ${cp})`);
+    const plan = planAdventureGoal();
+    gameState.son.lastChoice = {
+        pick: 'ADVENTURE',
+        tick: gameState.worldTick || 0,
+        reasons: [
+            `${(difficultyData[plan.diffKey] || difficultyData.normal).name.replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '')} 난이도`,
+            `${plan.mission?.name || '목표'}`
+        ]
+    };
+    const job = getAdventureJobPerks();
+    const baseCp = plan.cp;
+    const diffKey = plan.diffKey;
+    const diff = plan.diff;
+    const totalTicks = diff.duration[0] + Math.floor(Math.random() * (diff.duration[1] - diff.duration[0] + 1));
+    const appliedBuff = gameState.son.nextAdventureBuff ? normalizeNextAdventureBuff(gameState.son.nextAdventureBuff) : null;
+    if (appliedBuff) gameState.son.nextAdventureBuff = null;
+    gameState.son.adventure = {
+        ticks: 0,
+        totalTicks,
+        baseCp,
+        difficulty: diffKey,
+        zoneId: plan.zone.id,
+        missionId: plan.mission.id,
+        startedInjury: !!gameState.son.injury,
+        lastContactTick: 0,
+        mailSent: { a: false, b: false, c: false },
+        mailCount: 0,
+        eventsTriggered: { a: false, b: false, c: false },
+        buff: appliedBuff,
+        job
+    };
+    gameState.son.plannedGoal = null;
+
+    addMail(
+        "🏃‍♂️ 외출",
+        `아들이 모험을 떠났습니다! (${diff.name})<br>목표: ${plan.zone.emoji} ${plan.zone.name} · ${plan.mission.emoji} ${plan.mission.name}<br>전투력: ${baseCp} (권장CP ${plan.zone.recCP})<br>🧭 직업: ${job.name}${job.desc ? ` (${job.desc})` : ''}${appliedBuff ? `<br>✨ 적용 버프: ${describeNextAdventureBuff(appliedBuff)}` : ''}`
+    );
     updateUI();
 
     // Update scene on first tick
-    updateAdventureScene(0);
-
-    let ticks = 0;
-    const totalTicks = 60;
+    updateAdventureScene(0, totalTicks);
 
     adventureInterval = setInterval(() => {
-        ticks++;
+        if (!gameState.son.adventure) return;
+        gameState.son.adventure.ticks++;
+        const ticks = gameState.son.adventure.ticks;
+        const total = gameState.son.adventure.totalTicks;
         // Update progress bar
-        if (els.advProgress) els.advProgress.style.width = `${(ticks / totalTicks) * 100}%`;
+        if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
 
         // Update scene based on tick
-        updateAdventureScene(ticks);
+        updateAdventureScene(ticks, total);
+        maybeSendAdventureMail(ticks, total);
 
-        if (ticks >= totalTicks) {
+        if (ticks >= total) {
             clearInterval(adventureInterval);
             adventureInterval = null;
-            completeAdventure(cp);
+            completeAdventure();
         }
     }, 1000);
 }
 
-function updateAdventureScene(tick) {
+function updateAdventureScene(tick, totalTicks = 60) {
+    const t60 = (tick / totalTicks) * 60;
     let scene = adventureScenes[0];
     for (const s of adventureScenes) {
-        if (tick >= s.tick) scene = s;
+        if (t60 >= s.tick) scene = s;
     }
     if (els.advSceneEmoji) els.advSceneEmoji.innerText = scene.emoji;
     if (els.advSceneText) els.advSceneText.innerText = scene.text;
-    if (els.advSceneSub) els.advSceneSub.innerText = scene.sub;
+    if (els.advSceneSub) {
+        const zoneName = gameState.son.adventure ? `${getZoneById(gameState.son.adventure.zoneId).emoji} ${getZoneById(gameState.son.adventure.zoneId).name}` : '';
+        els.advSceneSub.innerText = zoneName ? `${zoneName} · ${scene.sub}` : scene.sub;
+    }
+}
+
+function maybeSendAdventureMail(ticks, totalTicks) {
+    if (gameState.son.state !== 'ADVENTURING') return;
+    if (!gameState.son.adventure) return;
+    const adv = gameState.son.adventure;
+    if (adv.mailCount >= 2) return;
+
+    const marks = [
+        { key: 'a', at: Math.floor(totalTicks * 0.22) },
+        { key: 'b', at: Math.floor(totalTicks * 0.5) },
+        { key: 'c', at: Math.floor(totalTicks * 0.76) }
+    ];
+    const mark = marks.find(m => m.at === ticks);
+    if (!mark) return;
+    if (adv.mailSent[mark.key]) return;
+    adv.mailSent[mark.key] = true;
+
+    const trust = gameState.son.affinity.trust;
+    const affection = gameState.son.affinity.affection;
+    const diligence = gameState.son.personality.diligence;
+    const bravery = gameState.son.personality.bravery;
+    const diffKey = adv.difficulty || 'normal';
+
+    // 성실/애정/신뢰가 높을수록 소식이 자주 옴. 대담할수록 “안 보내도 괜찮지” 성향.
+    let chance = 0.25;
+    chance += (diligence - 50) / 100 * 0.25;
+    chance += (affection - 50) / 100 * 0.18;
+    chance += (trust - 50) / 100 * 0.12;
+    chance -= (bravery - 50) / 100 * 0.10;
+    if (diffKey === 'safe') chance += 0.08;
+    if (diffKey === 'risky') chance -= 0.04;
+    chance = clamp01(chance);
+    if (Math.random() > chance) return;
+
+    const zone = getZoneById(adv.zoneId);
+    const mission = getMissionById(adv.missionId);
+    const templates = [
+        `엄마~ 저 무사하니 걱정하지 마세요! 지금 ${zone.name}에 있어요.`,
+        `엄마! 오늘은 힘이 넘쳐요. ${mission.name} 계속 해볼게요!`,
+        `엄마 보고 싶지만… 전 괜찮아요! 조금만 더 하고 갈게요.`,
+        `엄마! 방금 몬스터를 몇 마리나 잡았는지 맞춰봐요? 헤헤.`,
+        `엄마… 길이 좀 무서운데 그래도 해볼게요. 응원해줘요.`
+    ];
+    const msg = templates[Math.floor(Math.random() * templates.length)];
+    addMail("📮 안부 편지", msg);
+    adv.lastContactTick = ticks;
+    adv.mailCount++;
+    showToast("📮 아들의 소식이 도착했습니다!", 'info');
 }
 
 function encourageSon() {
@@ -774,53 +4835,150 @@ function encourageSon() {
     gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 3);
     gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 2);
     addMail("💌 응원 편지", "아들에게 응원 편지를 보냈습니다. 다음 모험에서 더 좋은 결과가...");
+    updateUI();
 }
 window.encourageSon = encourageSon;
 
-function completeAdventure(cp) {
-    // --- #2 Loot diversification ---
-    const earnedGold = Math.floor(cp * 5) + Math.floor(Math.random() * 200) + 50;
-    const encourageBonus = gameState.son.adventureEncouraged ? 1.2 : 1.0;
-    const finalGold = Math.floor(earnedGold * encourageBonus);
+function completeAdventure() {
+    const cp = getSonCombatPower();
+    const diffKey = gameState.son.adventure?.difficulty || 'normal';
+    const diff = difficultyData[diffKey] || difficultyData.normal;
+    const zone = getZoneById(gameState.son.adventure?.zoneId);
+    const mission = getMissionById(gameState.son.adventure?.missionId);
+    const def = getSonDef();
+    const legacyBuff = (!gameState.son.adventure?.buff && !!gameState.son.nextAdventureBuff) ? normalizeNextAdventureBuff(gameState.son.nextAdventureBuff) : null;
+    const appliedBuff = normalizeNextAdventureBuff(gameState.son.adventure?.buff || legacyBuff);
+    const job = gameState.son.adventure?.job || getAdventureJobPerks();
 
-    // Roll loot
+    const injuryRiskMul = gameState.son.injury?.riskMul ?? 1.0;
+    const effectiveCp = cp;
+    const score = effectiveCp / Math.max(1, zone.recCP);
+
+    let outcome = 'fail'; // great | success | partial | fail
+    if (score >= 1.25) outcome = 'great';
+    else if (score >= 1.0) outcome = 'success';
+    else if (score >= 0.78) outcome = 'partial';
+
+    const outcomeMul = outcome === 'great' ? 1.18 : outcome === 'success' ? 1.0 : outcome === 'partial' ? 0.65 : 0.35;
+
+    const rebellionMaverick =
+        diffKey === 'risky' &&
+        gameState.son.affinity.rebellion >= 70 &&
+        Math.random() < diff.maverickChance;
+    const rebellionBonus = rebellionMaverick ? 1.08 : 1.0;
+
+    const earnedGold = Math.floor((zone.baseGold + cp * 3.2 + Math.random() * 160) * diff.goldMul * mission.rewardMul * outcomeMul);
+    const encourageBonus = gameState.son.adventureEncouraged ? 1.2 : 1.0;
+    let finalGold = Math.floor(earnedGold * encourageBonus * rebellionBonus);
+    if (appliedBuff?.goldMul) finalGold = Math.floor(finalGold * appliedBuff.goldMul);
+    if (job?.goldMul) finalGold = Math.floor(finalGold * job.goldMul);
+
     const lootResults = [];
-    for (const item of lootTable) {
-        if (gameState.son.level >= item.minLv && Math.random() * 100 < item.prob) {
-            const amount = 1 + Math.floor(Math.random() * 2);
-            // Seeds go to farm
-            if (item.key.startsWith('seed_')) {
-                const seedType = item.key.replace('seed_', '');
-                const seedMap = { 'carrot': 'carrot', 'tomato': 'tomato', 'herb': 'herb_seed' };
-                const seedKey = seedMap[seedType];
-                if (seedKey && gameState.parent.farm.seeds[seedKey]) {
-                    gameState.parent.farm.seeds[seedKey].count += amount;
+    const lootPasses = rebellionMaverick ? 2 : 1;
+    const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0);
+
+    // Core loot table
+    for (let pass = 0; pass < lootPasses; pass++) {
+        for (const item of lootTable) {
+            const passMul = pass === 0 ? 1.0 : 0.45;
+            const prob = Math.min(95, item.prob * diff.lootMul * lootBuffMul * mission.rewardMul * passMul * outcomeMul);
+            if (gameState.son.level >= item.minLv && Math.random() * 100 < prob) {
+                const amount = 1 + Math.floor(Math.random() * 2);
+                if (item.key === 'seed') {
+                    ensureFarm();
+                    gameState.parent.farm.seed += amount;
+                    lootResults.push(`🌱 씨앗 x${amount}`);
+                } else {
+                    ensureLootKey(item.key);
+                    gameState.parent.loot[item.key].count += amount;
+                    lootResults.push(`${gameState.parent.loot[item.key]?.name || item.name} x${amount}`);
                 }
-            } else {
-                gameState.parent.loot[item.key].count += amount;
             }
-            lootResults.push(`${item.name} x${amount}`);
         }
     }
 
-    // EXP from adventure
-    const adventureExp = 20 + (gameState.son.level * 5);
+    // Zone drops
+    if (zone?.drops?.length) {
+        for (const drop of zone.drops) {
+            const prob = Math.min(95, drop.prob * diff.lootMul * lootBuffMul * mission.rewardMul * outcomeMul);
+            if (Math.random() * 100 < prob) {
+                const amount = drop.min + Math.floor(Math.random() * (drop.max - drop.min + 1));
+                if (drop.key === 'seed') {
+                    ensureFarm();
+                    gameState.parent.farm.seed += amount;
+                    lootResults.push(`🌱 씨앗 x${amount}`);
+                } else {
+                    ensureLootKey(drop.key);
+                    gameState.parent.loot[drop.key].count += amount;
+                    lootResults.push(`${gameState.parent.loot[drop.key]?.name || drop.key} x${amount}`);
+                }
+            }
+        }
+    }
+
+    const baseExp = 18 + (gameState.son.level * 5);
+    let adventureExp = Math.floor(baseExp * diff.expMul * mission.expMul * (outcome === 'great' ? 1.1 : outcome === 'partial' ? 0.75 : outcome === 'fail' ? 0.55 : 1.0));
+    if (appliedBuff?.expMul) adventureExp = Math.floor(adventureExp * appliedBuff.expMul);
+    if (job?.expMul) adventureExp = Math.floor(adventureExp * job.expMul);
     gameState.son.exp += adventureExp;
 
-    gameState.son.hp = Math.max(15, Math.floor(gameState.son.maxHp * 0.2));
-    gameState.son.hunger = Math.max(15, Math.floor(gameState.son.maxHunger * 0.2));
+    const baseFatigueFloor = diff.fatigueFloor;
+    let fatigueFloor = baseFatigueFloor;
+    if (appliedBuff?.fatigueAdd) fatigueFloor = Math.min(0.55, fatigueFloor + appliedBuff.fatigueAdd);
+    if (job?.fatigueAdd) fatigueFloor = Math.min(0.60, fatigueFloor + job.fatigueAdd);
+    gameState.son.hp = Math.max(15, Math.floor(gameState.son.maxHp * fatigueFloor));
+    gameState.son.hunger = Math.max(15, Math.floor(gameState.son.maxHunger * fatigueFloor));
+
     gameState.parent.gold += finalGold;
     gameState.son.state = 'IDLE';
     gameState.son.actionTimer = 0;
+    gameState.son.adventure = null;
     if (els.sprite) els.sprite.style.display = 'block';
+    if (legacyBuff) gameState.son.nextAdventureBuff = null;
 
-    // Build loot message
-    let lootMsg = `<b>💰 +${finalGold} 골드</b> | ⭐ +${adventureExp} EXP`;
-    if (lootResults.length > 0) {
-        lootMsg += `<br>📦 전리품: ${lootResults.join(', ')}`;
+    // World codex update (discover & records)
+    ensureWorldCodexState();
+    const codexResult = recordWorldRun(zone.id, mission.id, outcome, score);
+    if (codexResult.firstDiscovery) {
+        addMail("🗺️ 새로운 던전", `아들이 <b>${zone.emoji} ${zone.name}</b>에 대한 소문을 확인했습니다.\n이제 도감에 기록이 남습니다.`);
+        showToast(`🗺️ 도감 업데이트: ${zone.name}`, 'info');
     }
-    if (gameState.son.adventureEncouraged) {
-        lootMsg += `<br>💌 응원 보너스 적용! (+20%)`;
+    if (codexResult.firstBoss) {
+        const boss = zoneBosses[zone.id];
+        addMail("👑 보스 격파 기록", `아들이 <b>${boss?.emoji || '👑'} ${boss?.name || '보스'}</b>를 격파했습니다!`);
+        showToast("👑 보스 격파 기록!", 'levelup');
+    }
+
+    // Injury roll
+    const baseRisk = zone.injuryRisk * mission.riskMul * (diffKey === 'risky' ? 1.25 : diffKey === 'safe' ? 0.85 : 1.0);
+    const outcomeRiskMul = outcome === 'great' ? 0.6 : outcome === 'success' ? 1.0 : outcome === 'partial' ? 1.35 : 1.75;
+    const defMitigation = 1 / (1 + def * 0.12);
+    const buffRiskMul = appliedBuff?.riskMul ?? 1.0;
+    const jobRiskMul = job?.riskMul ?? 1.0;
+    const finalRisk = Math.min(0.85, baseRisk * outcomeRiskMul * injuryRiskMul * defMitigation * buffRiskMul * jobRiskMul);
+    if (Math.random() < finalRisk) {
+        const severityRoll = Math.random();
+        const deepFail = score < 0.7 ? 1 : 0;
+        const sev =
+            severityRoll < (0.55 - deepFail * 0.15) ? '경미' :
+            severityRoll < (0.88 - deepFail * 0.05) ? '중상' :
+            '심각';
+        applyInjury(sev);
+        addMail("🩹 부상", `모험 중 부상을 입었습니다. (${sev})`);
+        showToast("🩹 아들이 다쳤습니다...", 'error');
+    }
+
+    const pct = Math.max(0, Math.min(150, Math.round(score * 100)));
+    const outcomeText = outcomeLabel(outcome, pct);
+    let lootMsg = `<b>결과: ${outcomeText}</b><br><b>💰 +${finalGold} 골드</b> | ⭐ +${adventureExp} EXP`;
+    if (lootResults.length > 0) lootMsg += `<br>📦 전리품: ${lootResults.join(', ')}`;
+    if (gameState.son.adventureEncouraged) lootMsg += `<br>💌 응원 보너스 적용! (+20%)`;
+    if (appliedBuff) lootMsg += `<br>✨ 버프 적용: ${describeNextAdventureBuff(appliedBuff)}`;
+    if (job && job.key !== 'neutral') lootMsg += `<br>🧭 직업 특성 적용: ${job.name}${job.desc ? ` (${job.desc})` : ''}`;
+    if (rebellionMaverick) {
+        lootMsg += `<br>🌟 고집이 발동해 예상 밖의 성과를 냈습니다.`;
+        gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2);
+        gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 2);
     }
     addMail("🏆 귀환 완료!", lootMsg, true);
     showToast(`귀환! +${finalGold}G ${lootResults.length > 0 ? '+ 전리품 ' + lootResults.length + '종' : ''}`, 'gold');
@@ -847,45 +5005,55 @@ function handleActionCompletion() {
     const tableLv = gameState.parent.upgrades.table;
     const dummyLv = gameState.parent.upgrades.dummy;
     const deskLv = gameState.parent.upgrades.desk;
+    const healMul = gameState.son.injury?.healMul ?? 1.0;
 
     if (gameState.son.state === 'SLEEPING') {
-        const recovery = upgradeData.bed.effects[bedLv - 1] + healBonus;
+        const recovery = Math.floor((upgradeData.bed.effects[bedLv - 1] + healBonus) * healMul);
         sonSpeech("잘 잤다!");
         gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + recovery);
+        showToast(`🛏️ 수면 회복 +${recovery}HP`, 'success');
+        maybeProcFromBedAfterSleep();
     } else if (gameState.son.state === 'EATING') {
         const placed = gameState.rooms['room-table'].placedItem;
         if (placed === 'steak') {
             sonSpeech("스테이크 최고!");
             gameState.son.hunger = gameState.son.maxHunger;
             gameState.son.exp += 30;
+            showToast("🥩 스테이크: 허기 MAX · EXP +30", 'success');
             gameState.rooms['room-table'].placedItem = null;
-            els.slots['room-table'].innerHTML = `<span class="slot-label">빈 접시</span>➕`;
-            els.slots['room-table'].classList.remove('filled');
+            updateKitchenSlotUI();
         } else if (placed === 'homemade_meal') {
             sonSpeech("엄마 집밥 최고!!");
             gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 80);
             gameState.son.exp += 15;
             gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 3);
+            showToast("🍲 집밥: 허기 +80 · EXP +15 · 애정 +3", 'success');
             gameState.rooms['room-table'].placedItem = null;
-            els.slots['room-table'].innerHTML = `<span class="slot-label">빈 접시</span>➕`;
-            els.slots['room-table'].classList.remove('filled');
+            updateKitchenSlotUI();
         } else if (placed === 'herb_potion') {
             sonSpeech("약초 물약... 쓰다!");
-            gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + 60);
+            const hpGain = Math.floor(60 * healMul);
+            gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + hpGain);
             gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + 20);
+            showToast(`🧪 약초 물약: HP +${hpGain} · 허기 +20`, 'success');
             gameState.rooms['room-table'].placedItem = null;
-            els.slots['room-table'].innerHTML = `<span class="slot-label">빈 접시</span>➕`;
-            els.slots['room-table'].classList.remove('filled');
+            updateKitchenSlotUI();
         } else {
-            const recovery = upgradeData.table.effects[tableLv - 1] + healBonus;
+            const recovery = Math.floor((upgradeData.table.effects[tableLv - 1] + healBonus) * healMul);
             sonSpeech("밥 다 먹었다...");
             gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + recovery);
+            showToast(`🍽️ 기본 식사 허기 +${recovery}`, 'success');
         }
+        maybeProcFromTableAfterMeal();
     } else if (gameState.son.state === 'TRAINING') {
         const baseExp = upgradeData.dummy.effects[dummyLv - 1];
+        const trainingType = resolveTrainingType();
+        const toolBonus = gameState.rooms['room-dummy'].placedItem === 'sandbag';
+        let gained = baseExp;
         if (gameState.rooms['room-dummy'].placedItem === 'sandbag') {
             sonSpeech("모래주머니 훈련 끝!");
-            gameState.son.exp += baseExp + 50;
+            gained = baseExp + 50;
+            gameState.son.exp += gained;
             gameState.rooms['room-dummy'].placedItem = null;
             els.slots['room-dummy'].innerHTML = `<span class="slot-label">빈 슬롯</span>➕`;
             els.slots['room-dummy'].classList.remove('filled');
@@ -893,20 +5061,101 @@ function handleActionCompletion() {
             sonSpeech("기본 훈련 끝!");
             gameState.son.exp += baseExp;
         }
+        const growth = applyTrainingGrowth(trainingType, toolBonus);
+        showToast(`${growth.label}: EXP +${gained}${growth.summary ? ' · ' + growth.summary : ''}`, 'levelup');
+        const trustGain = toolBonus ? 2 : 1;
+        const rebellionDown = toolBonus ? 2 : 1;
+        gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + trustGain, 0, 100);
+        gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - rebellionDown, 0, 100);
+        gameState.son.personality.diligence = clampInt((gameState.son.personality.diligence || 50) + 1, 0, 100);
+        maybeTriggerUnexpectedGrowthHome('TRAINING');
     } else if (gameState.son.state === 'STUDYING') {
         const baseExp = upgradeData.desk.effects[deskLv - 1];
-        if (gameState.rooms['room-desk'].placedItem === 'book_hero') {
-            sonSpeech("영웅학 개론 독파!");
-            gameState.son.exp += baseExp + 80;
-            gameState.rooms['room-desk'].placedItem = null;
-            els.slots['room-desk'].innerHTML = `<span class="slot-label">빈 슬롯</span>➕`;
-            els.slots['room-desk'].classList.remove('filled');
-        } else {
-            sonSpeech("공부 끝...");
-            gameState.son.exp += baseExp;
+        sonSpeech("공부 끝...");
+        gameState.son.exp += baseExp;
+        showToast(`📚 공부 EXP +${baseExp}`, 'levelup');
+        const r = tryReadFromBookshelf();
+        if (!r?.read) {
+            // gentle hint, not every time
+            if (r && Math.random() < 0.22) showToast("📖 책장은 봤지만… 아직 마음이 안 가나 봐요.", 'info');
         }
+        maybeProcFromDeskAfterStudy();
+        gameState.son.affinity.trust = clampInt((gameState.son.affinity.trust || 0) + 1, 0, 100);
+        gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - 1, 0, 100);
+        gameState.son.personality.diligence = clampInt((gameState.son.personality.diligence || 50) + 1, 0, 100);
+        // Studying tends to make the son slightly more cautious over time
+        gameState.son.personality.bravery = clampInt(gameState.son.personality.bravery - 1, 0, 100);
+        maybeTriggerUnexpectedGrowthHome('STUDYING');
+    } else if (gameState.son.state === 'RESTING') {
+        sonSpeech("잠깐 쉬었다 가자...");
+        const hpGain = Math.floor((Math.floor(upgradeData.bed.effects[bedLv - 1] * 0.25) + 8 + healBonus) * healMul);
+        const hungerGain = Math.floor((Math.floor(upgradeData.table.effects[tableLv - 1] * 0.2) + 6) * healMul);
+        gameState.son.hp = Math.min(gameState.son.maxHp, gameState.son.hp + hpGain);
+        gameState.son.hunger = Math.min(gameState.son.maxHunger, gameState.son.hunger + hungerGain);
+        showToast(`🧸 휴식 +${hpGain}HP · 허기 +${hungerGain}`, 'success');
+        const extraAffection = gameState.son.injury ? 1 : 0;
+        gameState.son.affinity.affection = clampInt((gameState.son.affinity.affection || 0) + 1 + extraAffection, 0, 100);
+        gameState.son.affinity.rebellion = clampInt((gameState.son.affinity.rebellion || 0) - 2, 0, 100);
+        gameState.son.personality.diligence = clampInt((gameState.son.personality.diligence || 50) + 1, 0, 100);
+        gameState.son.personality.calmness = clampInt((gameState.son.personality.calmness || 50) + 1, 0, 100);
+        gameState.son.personality.flexibility = clampInt((gameState.son.personality.flexibility ?? 50) + 1, 0, 100);
+        gameState.son.personality.bravery = clampInt(gameState.son.personality.bravery - 1, 0, 100);
+        maybeTriggerUnexpectedGrowthHome('RESTING');
     }
     gameState.son.state = 'IDLE';
+}
+
+function maybeTriggerUnexpectedGrowthHome(lastAction) {
+    const rebellion = gameState.son.affinity.rebellion;
+    if (rebellion < 65) return;
+    if (Math.random() > 0.035) return;
+    const bonusExp = 12 + Math.floor(gameState.son.level * 3);
+    gameState.son.exp += bonusExp;
+    gameState.son.affinity.trust = Math.max(0, gameState.son.affinity.trust - 2);
+    gameState.son.affinity.rebellion = Math.min(100, gameState.son.affinity.rebellion + 1);
+    addMail(
+        "🌟 뜻밖의 성장",
+        `아들이 ${lastAction === 'TRAINING' ? '몰래 특훈' : lastAction === 'STUDYING' ? '혼자 공부' : '스스로 정리'}로 성장했습니다. (EXP +${bonusExp})`
+    );
+    showToast("🌟 아들이 혼자서도 성장했습니다.", 'levelup');
+}
+
+function getBookshelfAttraction() {
+    ensureLibraryState();
+    const lib = gameState.parent.library;
+    const shelf = lib?.shelf;
+    if (!Array.isArray(shelf) || shelf.length === 0) return 0;
+    let best = 0;
+    for (let i = 0; i < shelf.length; i++) {
+        const id = shelf[i];
+        if (!id) continue;
+        const book = bookById[id];
+        if (!book) continue;
+        const bias = lib.shelfBias?.[i] ?? 0;
+        best = Math.max(best, computeBookInterest(book, bias));
+    }
+    return clamp01(best);
+}
+
+function getTrainingAttraction() {
+    ensureSonGrowthState();
+    const p = gameState.son.personality || {};
+    const m = gameState.son.trainingMastery || {};
+    const norm = (v) => Math.max(0, Math.min(1, (v || 0) / 100));
+    const mastery = (v) => Math.max(0, Math.min(1, (v || 0) / 80));
+    const toolPlaced = gameState.rooms?.['room-dummy']?.placedItem === 'sandbag';
+
+    const type = getTrainingTypeFromDummyModel();
+    let desire = 0.55;
+    if (type === 'strength') desire = 0.55 * norm(p.endurance) + 0.45 * mastery(m.strength);
+    else if (type === 'magic') desire = 0.55 * norm(p.intelligence) + 0.45 * mastery(m.magic);
+    else if (type === 'archery') desire = 0.55 * norm(p.focus) + 0.45 * mastery(m.archery);
+    else if (type === 'legend') desire = 0.65;
+    else desire = 0.55; // random/basic
+
+    if (toolPlaced) desire += 0.18;
+    if (gameState.son.injury) desire -= 0.12;
+    return clamp01(desire);
 }
 
 function sonAI() {
@@ -920,8 +5169,11 @@ function sonAI() {
     // 2. Action timer tick
     if (gameState.son.actionTimer > 0) {
         gameState.son.actionTimer--;
+        const injuryDrain = gameState.son.injury?.hungerDrain ?? 0;
         if (gameState.son.state === 'TRAINING') { gameState.son.hp -= 1; gameState.son.hunger -= 1; }
         if (gameState.son.state === 'STUDYING') { gameState.son.hunger -= 0.5; }
+        if (gameState.son.state === 'RESTING') { gameState.son.hunger -= 0.2; }
+        if (injuryDrain > 0) gameState.son.hunger -= injuryDrain;
 
         if (Math.random() < 0.1 && gameState.son.actionTimer > 3) {
             const dialogues = sonDialogues[gameState.son.state] || sonDialogues['IDLE'];
@@ -939,16 +5191,19 @@ function sonAI() {
     // 3. Decision making
     if (gameState.son.quest) handleQuestTick();
 
-    // #1 fix: Adventure only when 80% AND first cycle done (son needs care first)
+    // #1 fix: Adventure only when 80% AND mom isn't touching the wardrobe
     if (gameState.son.hp >= (gameState.son.maxHp * 0.8) && gameState.son.hunger >= (gameState.son.maxHunger * 0.8)) {
-        startAdventure();
-        return;
+        if (!isWardrobeLocked()) {
+            startAdventure();
+            return;
+        }
     }
 
     triggerRandomQuest();
 
     // Passive hunger/hp drain when idle
-    gameState.son.hunger = Math.max(0, gameState.son.hunger - 0.3);
+    const injuryDrainIdle = gameState.son.injury?.hungerDrain ?? 0;
+    gameState.son.hunger = Math.max(0, gameState.son.hunger - 0.3 - injuryDrainIdle);
 
     if (gameState.son.hp <= 50) {
         gameState.son.state = 'SLEEPING';
@@ -965,15 +5220,93 @@ function sonAI() {
             sonSpeech("아 다 귀찮아! 아무것도 안 할래!");
             gameState.son.actionTimer = 5;
         } else {
-            if (Math.random() > 0.5) {
+            const p = gameState.son.personality || {};
+            const a = gameState.son.affinity || {};
+            const bravery = Number.isFinite(p.bravery) ? p.bravery : 50;
+            const diligence = Number.isFinite(p.diligence) ? p.diligence : 50;
+            const calmness = Number.isFinite(p.calmness) ? p.calmness : 50;
+            const intelligence = Number.isFinite(p.intelligence) ? p.intelligence : 50;
+            const endurance = Number.isFinite(p.endurance) ? p.endurance : 50;
+            const rebellion = Number.isFinite(a.rebellion) ? a.rebellion : 0;
+
+            const cautiousFactor = clamp01((50 - bravery) / 50);
+            const braveFactor = clamp01((bravery - 50) / 50);
+            const diligentFactor = clamp01((diligence - 50) / 50);
+            const calmFactor = clamp01((calmness - 50) / 50);
+            const smartFactor = clamp01((intelligence - 50) / 50);
+            const toughFactor = clamp01((endurance - 50) / 50);
+            const rebellionFactor = clamp01(rebellion / 100);
+            const flexibility = Number.isFinite(p.flexibility) ? p.flexibility : 50;
+            const flexFactor = clamp01(flexibility / 100);
+
+            const bookshelfAttraction = getBookshelfAttraction();
+            const trainingAttraction = getTrainingAttraction();
+            const lureMul = (1 - rebellionFactor * 0.55) * (0.75 + flexFactor * 0.25);
+
+            let wRest =
+                0.26 +
+                cautiousFactor * 0.14 +
+                calmFactor * 0.10 +
+                (gameState.son.injury ? 0.22 : 0);
+            let wTrain =
+                0.30 +
+                braveFactor * 0.14 +
+                toughFactor * 0.10 +
+                (trainingAttraction * 0.22 * lureMul);
+            let wStudy =
+                0.28 +
+                smartFactor * 0.14 +
+                diligentFactor * 0.10 +
+                (bookshelfAttraction * 0.22 * lureMul);
+
+            // If injured, training becomes less appealing
+            if (gameState.son.injury) wTrain -= 0.08;
+
+            wRest = Math.max(0.05, wRest);
+            wTrain = Math.max(0.05, wTrain);
+            wStudy = Math.max(0.05, wStudy);
+            const totalW = Math.max(0.01, wRest + wTrain + wStudy);
+            const r = Math.random() * totalW;
+            const pick =
+                r < wRest ? 'RESTING' :
+                r < wRest + wTrain ? 'TRAINING' :
+                'STUDYING';
+
+            const choiceReasons = [];
+            if (rebellionFactor >= 0.65) choiceReasons.push('고집이 세서 엄마의 유도에 덜 끌려요');
+            if (pick === 'RESTING') {
+                if (gameState.son.injury) choiceReasons.push('부상이 있어서 쉬려 해요');
+                if (calmness >= 60) choiceReasons.push('차분해서 휴식을 선호해요');
+                if (bravery <= 40) choiceReasons.push('신중해서 무리하지 않으려 해요');
+            } else if (pick === 'TRAINING') {
+                if (trainingAttraction >= 0.68) choiceReasons.push('훈련장이 마음에 들어 보여요');
+                if (gameState.rooms?.['room-dummy']?.placedItem === 'sandbag') choiceReasons.push('모래주머니가 있어서 더 신나 보여요');
+                if (bravery >= 60) choiceReasons.push('대담해서 몸을 쓰고 싶어 해요');
+            } else if (pick === 'STUDYING') {
+                if (bookshelfAttraction >= 0.68) choiceReasons.push('책장에 관심이 생겼어요');
+                if (intelligence >= 60) choiceReasons.push('호기심이 많아서 공부를 택했어요');
+                if (diligence >= 60) choiceReasons.push('성실해서 책을 펼치려 해요');
+            }
+            gameState.son.lastChoice = {
+                pick,
+                tick: gameState.worldTick || 0,
+                reasons: choiceReasons.slice(0, 3)
+            };
+
+            if (pick === 'RESTING') {
+                gameState.son.state = 'RESTING';
+                moveToRoom('room-bed');
+                gameState.son.actionTimer = 14;
+                sonSpeech("조금만 쉬고 할래요.");
+            } else if (pick === 'TRAINING') {
                 gameState.son.state = 'TRAINING';
                 moveToRoom('room-dummy');
-                gameState.son.actionTimer = 20;
+                gameState.son.actionTimer = 22;
                 sonSpeech("훈련을 시작하지!");
             } else {
                 gameState.son.state = 'STUDYING';
                 moveToRoom('room-desk');
-                gameState.son.actionTimer = 20;
+                gameState.son.actionTimer = 22;
                 sonSpeech("책 좀 읽어볼까.");
             }
         }
@@ -1002,144 +5335,171 @@ function checkLevelUp() {
 // ============================================================
 // #5 — Farm System
 // ============================================================
-const seedShopItems = [
-    { key: 'carrot', name: '🥕 당근 씨앗', cost: 30 },
-    { key: 'tomato', name: '🍅 토마토 씨앗', cost: 50 },
-    { key: 'herb_seed', name: '🌿 약초 씨앗', cost: 80 }
-];
+function rollFarmHarvest(level) {
+    const lv = Math.max(1, Math.floor(level || 1));
+    const table =
+        lv <= 1
+            ? [
+                { key: 'carrot', emoji: '🥕', w: 70, min: 1, max: 1 },
+                { key: 'tomato', emoji: '🍅', w: 30, min: 1, max: 1 }
+            ]
+            : lv === 2
+                ? [
+                    { key: 'carrot', emoji: '🥕', w: 55, min: 1, max: 2 },
+                    { key: 'tomato', emoji: '🍅', w: 35, min: 1, max: 2 },
+                    { key: 'herb', emoji: '🌿', w: 10, min: 1, max: 1 }
+                ]
+                : lv === 3
+                    ? [
+                        { key: 'carrot', emoji: '🥕', w: 45, min: 1, max: 3 },
+                        { key: 'tomato', emoji: '🍅', w: 30, min: 1, max: 3 },
+                        { key: 'herb', emoji: '🌿', w: 25, min: 1, max: 2 }
+                    ]
+                    : [
+                        { key: 'carrot', emoji: '🥕', w: 40, min: 2, max: 4 },
+                        { key: 'tomato', emoji: '🍅', w: 25, min: 2, max: 4 },
+                        { key: 'herb', emoji: '🌿', w: 35, min: 1, max: 3 }
+                    ];
+
+    const total = table.reduce((acc, t) => acc + t.w, 0);
+    let r = Math.random() * total;
+    let chosen = table[0];
+    for (const t of table) {
+        r -= t.w;
+        if (r <= 0) {
+            chosen = t;
+            break;
+        }
+    }
+    const amount = chosen.min + Math.floor(Math.random() * (chosen.max - chosen.min + 1));
+    return { key: chosen.key, emoji: chosen.emoji, amount };
+}
+
+function farmHarvestAtPlot(plotIndex) {
+    ensureFarm();
+    ensurePantry();
+    const f = gameState.parent.farm;
+    const plot = f.plots[plotIndex];
+    if (!plot) return;
+
+    if (plot.state === 'ready') {
+        harvestFarmPlot(plotIndex);
+        return;
+    }
+    if (plot.state === 'growing') {
+        showToast(`🌱 자라는 중... (${Math.max(0, plot.timer || 0)}초 남음)`, 'info');
+        return;
+    }
+
+    // empty -> start growing
+    if ((f.seed || 0) <= 0) {
+        showToast('씨앗이 없어요. (마을 상점에서 구매하거나 모험 전리품으로 얻어요)', 'error');
+        return;
+    }
+    f.seed -= 1;
+    const grow = 10 + Math.floor(Math.random() * 21); // 10~30s
+    plot.state = 'growing';
+    plot.timer = grow;
+    showToast(`🌱 재배 시작! (${grow}초 후 수확) (씨앗 -1)`, 'success');
+    updateUI();
+}
+window.farmHarvestAtPlot = farmHarvestAtPlot;
+
+function harvestFarmPlot(plotIndex) {
+    ensureFarm();
+    ensurePantry();
+    const f = gameState.parent.farm;
+    const plot = f.plots[plotIndex];
+    if (!plot || plot.state !== 'ready') return;
+
+    const roll = rollFarmHarvest(f.level);
+    if (!gameState.parent.harvestBag[roll.key]) gameState.parent.harvestBag[roll.key] = 0;
+    gameState.parent.harvestBag[roll.key] += roll.amount;
+
+    plot.state = 'empty';
+    plot.timer = 0;
+
+    addFarmXp(1);
+    const nm = ingredientNames[roll.key] || roll.key;
+    showToast(`${roll.emoji} 수확! ${nm} x${roll.amount}`, 'success');
+    updateUI();
+}
 
 function updateFarmUI() {
     if (!els.farmGrid) return;
+    ensureFarm();
+
+    const f = gameState.parent.farm;
+    const lvEl = document.getElementById('farm-lv');
+    const xpTextEl = document.getElementById('farm-xp-text');
+    const xpBarEl = document.getElementById('farm-xp-bar');
+    const seedEl = document.getElementById('farm-seed');
+    if (lvEl) lvEl.innerText = String(f.level);
+    if (seedEl) seedEl.innerText = String(f.seed || 0);
+    const need = getFarmXpToNext(f.level);
+    const xp = f.xp || 0;
+    if (xpTextEl) xpTextEl.innerText = `${xp}/${need}`;
+    if (xpBarEl) {
+        const pct = need > 0 ? Math.max(0, Math.min(100, Math.round((xp / need) * 100))) : 0;
+        xpBarEl.style.width = `${pct}%`;
+    }
+
     els.farmGrid.innerHTML = '';
-    gameState.parent.farm.plots.forEach((plot, i) => {
+    f.plots.forEach((plot, i) => {
         const div = document.createElement('div');
         div.className = 'farm-plot';
-        if (plot.state === 'growing') {
+        if (plot.state === 'growing' && (plot.timer || 0) > 0) {
             div.classList.add('growing');
-            const seed = gameState.parent.farm.seeds[plot.seedType];
-            div.innerHTML = `<div class="farm-plot-emoji">🌱</div><div class="farm-plot-timer">${plot.timer}초</div>`;
+            div.innerHTML = `<div class="farm-plot-emoji">⏳</div><div class="farm-plot-timer">${plot.timer}초</div>`;
+            div.onclick = () => farmHarvestAtPlot(i);
         } else if (plot.state === 'ready') {
             div.classList.add('ready');
-            const seed = gameState.parent.farm.seeds[plot.seedType];
-            div.innerHTML = `<div class="farm-plot-emoji">${seed.emoji}</div><div style="font-size:0.7rem;color:#f59e0b;font-weight:bold;">수확!</div>`;
-            div.onclick = () => harvestPlot(i);
+            div.innerHTML = `<div class="farm-plot-emoji">✨</div><div style="font-size:0.7rem;color:#f59e0b;font-weight:bold;">수확!</div>`;
+            div.onclick = () => harvestFarmPlot(i);
         } else {
-            div.innerHTML = `<div class="farm-plot-emoji">🟫</div><div>빈 밭</div>`;
-            div.onclick = () => showSeedPicker(i);
+            div.innerHTML = `<div class="farm-plot-emoji">🟫</div><div>재배 시작</div><div class="farm-plot-timer">씨앗 -1 · 10~30초</div>`;
+            div.onclick = () => farmHarvestAtPlot(i);
         }
         els.farmGrid.appendChild(div);
     });
-
-    // Show seed inventory below
-    const seedInfo = document.createElement('div');
-    seedInfo.style.cssText = 'margin-top:8px; font-size:0.75rem; color:#64748b; display:flex; gap:10px; flex-wrap:wrap;';
-    Object.keys(gameState.parent.farm.seeds).forEach(k => {
-        const s = gameState.parent.farm.seeds[k];
-        seedInfo.innerHTML += `<span>${s.emoji || '🌱'} ${s.name.split(' ')[1] || k}: ${s.count}개</span>`;
-    });
-    els.farmGrid.appendChild(seedInfo);
-}
-
-function showSeedPicker(plotIndex) {
-    els.invList.innerHTML = '<h4 style="margin-bottom:10px;">씨앗 선택</h4>';
-    let hasSeeds = false;
-
-    Object.keys(gameState.parent.farm.seeds).forEach(key => {
-        const seed = gameState.parent.farm.seeds[key];
-        if (seed.count > 0) {
-            hasSeeds = true;
-            const btn = document.createElement('button');
-            btn.className = 'item-btn';
-            btn.innerText = `${seed.name} (보유: ${seed.count}) - ${seed.growTime}초`;
-            btn.onclick = () => plantSeed(plotIndex, key);
-            els.invList.appendChild(btn);
-        }
-    });
-
-    // Buy seeds option
-    const buyHeader = document.createElement('h4');
-    buyHeader.style.cssText = 'margin-top:12px; margin-bottom:8px; font-size:0.85rem; color:#475569;';
-    buyHeader.innerText = '씨앗 구매';
-    els.invList.appendChild(buyHeader);
-
-    seedShopItems.forEach(item => {
-        const btn = document.createElement('button');
-        btn.className = 'item-btn';
-        btn.style.fontSize = '0.8rem';
-        btn.innerText = `${item.name} 구매 (${item.cost}G)`;
-        btn.onclick = () => {
-            if (gameState.parent.gold >= item.cost) {
-                gameState.parent.gold -= item.cost;
-                gameState.parent.farm.seeds[item.key].count++;
-                showToast(`${item.name} 구매!`, 'success');
-                showSeedPicker(plotIndex); // Refresh
-                updateUI();
-            } else {
-                showToast('골드 부족!', 'error');
-            }
-        };
-        els.invList.appendChild(btn);
-    });
-
-    if (!hasSeeds) {
-        const p = document.createElement('p');
-        p.style.cssText = 'color:#ef4444; font-size:0.85rem; margin-bottom:8px;';
-        p.innerText = '보유 중인 씨앗이 없습니다.';
-        els.invList.prepend(p);
-    }
-
-    els.invModal.style.display = 'flex';
-}
-
-function plantSeed(plotIndex, seedKey) {
-    const seed = gameState.parent.farm.seeds[seedKey];
-    if (seed.count <= 0) return;
-    seed.count--;
-    gameState.parent.farm.plots[plotIndex] = { state: 'growing', seedType: seedKey, timer: seed.growTime };
-    closeInventory();
-    showToast(`${seed.name} 심기 완료!`, 'success');
-    updateUI();
-}
-
-function harvestPlot(plotIndex) {
-    const plot = gameState.parent.farm.plots[plotIndex];
-    if (plot.state !== 'ready') return;
-
-    const seed = gameState.parent.farm.seeds[plot.seedType];
-    // Harvest gives the ingredient (stored in loot for recipes)
-    const harvestMap = {
-        'carrot': { lootKey: null, invKey: null, name: '🥕 당근' },
-        'tomato': { lootKey: null, invKey: null, name: '🍅 토마토' },
-        'herb_seed': { lootKey: 'herb', invKey: null, name: '🌿 약초' }
-    };
-
-    // For carrot/tomato, we store harvest count in seeds themselves as "harvest"
-    // Simpler: add to a harvestBag
-    if (!gameState.parent.harvestBag) gameState.parent.harvestBag = {};
-    const bagKey = plot.seedType;
-    if (!gameState.parent.harvestBag[bagKey]) gameState.parent.harvestBag[bagKey] = 0;
-    const amount = 1 + Math.floor(Math.random() * 2);
-    gameState.parent.harvestBag[bagKey] += amount;
-
-    // Herb also adds to loot
-    if (plot.seedType === 'herb_seed') {
-        gameState.parent.loot.herb.count += amount;
-    }
-
-    showToast(`${seed.emoji} 수확! x${amount}`, 'success');
-    gameState.parent.farm.plots[plotIndex] = { state: 'empty', seedType: null, timer: 0 };
-    updateUI();
 }
 
 function farmTick() {
-    gameState.parent.farm.plots.forEach((plot, i) => {
-        if (plot.state === 'growing') {
-            plot.timer--;
-            if (plot.timer <= 0) {
-                plot.state = 'ready';
-            }
-        }
+    ensureFarm();
+    const f = gameState.parent.farm;
+    f.plots.forEach(plot => {
+        if (plot.state !== 'growing') return;
+        plot.timer = Math.max(0, Math.floor((plot.timer || 0) - 1));
+        if (plot.timer <= 0) plot.state = 'ready';
     });
+}
+
+function kitchenTick() {
+    ensureKitchenState();
+    const cooking = gameState.parent.kitchen.cooking;
+    if (!cooking) return;
+    cooking.remaining = Math.max(0, (cooking.remaining || 0) - 1);
+    if (cooking.remaining > 0) {
+        updateKitchenSlotUI();
+        return;
+    }
+
+    const recipeId = cooking.recipeId;
+    const recipe = recipes.find(r => r.id === recipeId);
+    gameState.parent.kitchen.cooking = null;
+
+    if (!gameState.rooms['room-table'].placedItem) {
+        gameState.rooms['room-table'].placedItem = recipeId;
+        showToast(`🍽️ ${recipe?.name || recipeId} 완성! 식탁에 올려두었습니다.`, 'success');
+    } else {
+        // Fallback: store in inventory if table is unexpectedly full
+        if (gameState.parent.inventory?.[recipeId]) {
+            gameState.parent.inventory[recipeId].count++;
+        }
+        showToast(`🍱 ${recipe?.name || recipeId} 완성! (보관)`, 'success');
+    }
+    updateKitchenSlotUI();
+    updateUI();
 }
 
 // --- Cooking ---
@@ -1155,8 +5515,8 @@ function updateCookUI() {
         const needsText = Object.entries(recipe.needs).map(([k, v]) => {
             const have = gameState.parent.harvestBag[k] || 0;
             const color = have >= v ? '#10b981' : '#ef4444';
-            const seedName = gameState.parent.farm.seeds[k]?.name?.split(' ')[1] || k;
-            return `<span style="color:${color}">${seedName} ${have}/${v}</span>`;
+            const nm = ingredientNames[k] || k;
+            return `<span style="color:${color}">${nm} ${have}/${v}</span>`;
         }).join(' ');
 
         const canCook = Object.entries(recipe.needs).every(([k, v]) => (gameState.parent.harvestBag[k] || 0) >= v);
@@ -1194,52 +5554,52 @@ window.cookRecipe = cookRecipe;
 // ============================================================
 // Gacha & Work
 // ============================================================
-els.btnGacha.addEventListener('click', () => {
-    if (gameState.parent.gold >= 1000) {
-        gameState.parent.gold -= 1000;
-        const rand = Math.floor(Math.random() * 100);
-        let picked = weaponsList[0];
-        let curProb = 0;
-        for (let w of weaponsList) { curProb += w.prob; if (rand < curProb) { picked = w; break; } }
-        gameState.parent.weaponInventory[picked.tier].count++;
-        els.gachaResult.style.display = 'block';
-        els.gachaResult.innerHTML = `망치질을 하는 중... 🔨`;
-        els.btnGacha.disabled = true;
-        setTimeout(() => {
-            els.gachaResult.innerHTML = `[${picked.tier}급] ${picked.name} 획득! → 옷장에 보관됨`;
-            els.gachaResult.className = `gacha-result tier-${picked.tier}`;
-            els.btnGacha.disabled = false;
-            showToast(`[${picked.tier}급] ${picked.name} 획득!`, picked.tier === 'S' ? 'gold' : picked.tier === 'A' ? 'levelup' : 'info');
-            updateUI();
-        }, 1500);
-    } else {
-        showToast("골드 부족! (1,000G 필요)", 'error');
-    }
-});
+if (els.btnGacha) {
+    els.btnGacha.addEventListener('click', () => performGacha('basic'));
+}
+if (els.btnGachaPremium) {
+    els.btnGachaPremium.addEventListener('click', () => performGacha('premium'));
+}
+if (els.btnTemper) {
+    els.btnTemper.addEventListener('click', () => temperSmithy());
+}
+if (els.btnSpecialOrder) {
+    els.btnSpecialOrder.addEventListener('click', () => specialOrderSmithy());
+}
 
-els.btnWork.addEventListener('click', () => {
-    gameState.parent.gold += 10;
-    els.gold.classList.add('gold-pop');
-    setTimeout(() => els.gold.classList.remove('gold-pop'), 500);
-    updateUI();
-});
+if (els.btnWork) {
+    els.btnWork.addEventListener('click', () => doSideJob());
+}
 
 // ============================================================
 // Initialization
 // ============================================================
 console.log("Hero Mom Prototype v2 - Enhanced Loaded.");
 
-// #1 Fix: Son starts with lower HP/hunger, needing care before first adventure
-sonSpeech("엄마... 배고프고 졸려요...");
-addMail("📖 시작", "아들이 피곤하고 배고파합니다. 밥을 차리고 침대를 마련해주세요!");
+const loaded = loadGame();
+if (!loaded) {
+    // #1 Fix: Son starts with lower HP/hunger, needing care before first adventure
+    sonSpeech("엄마... 배고프고 졸려요...");
+    addMail("📖 시작", "아들이 피곤하고 배고파합니다. 밥을 차리고 침대를 마련해주세요!");
+} else {
+    showToast("💾 저장 데이터를 불러왔습니다.", 'success');
+}
 
 moveToRoom(gameState.son.currentRoom);
 updateUpgradeButtons(getActiveRoom());
 updateUI();
+initPixelAssets();
+window.addEventListener('beforeunload', () => saveGame());
 
 // Main game loop (1 second)
 setInterval(() => {
+    gameState.worldTick = Math.max(0, Math.floor((gameState.worldTick || 0) + 1));
+    updateBookstoreRotation();
     sonAI();
+    injuryTick();
+    workTick();
     farmTick();
+    kitchenTick();
     updateFarmUI();
+    if ((gameState.worldTick || 0) % 10 === 0) saveGame();
 }, 1000);

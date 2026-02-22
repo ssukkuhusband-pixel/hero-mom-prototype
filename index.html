@@ -9,15 +9,22 @@
 <body>
     <div class="game-container">
         <!-- 1. Top Status Bar -->
-        <header class="status-bar">
-            <div class="status-header">
-                <h2>아들 상태 <span id="son-level" style="font-weight: 500; color: #64748b; font-size: 0.9rem;">(Lv. 1)</span>
-                    <span id="son-weapon" class="weapon-badge tier-C">몽둥이 (공+1)</span>
-                </h2>
-                <div class="parent-resources">
-                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
-                </div>
-            </div>
+	        <header class="status-bar">
+	            <div class="status-header">
+	                <h2>아들 상태 <span id="son-level" style="font-weight: 500; color: #64748b; font-size: 0.9rem;">(Lv. 1)</span>
+	                    <span id="son-weapon" class="weapon-badge tier-C">몽둥이 (공+1)</span>
+	                </h2>
+			                <div class="parent-resources">
+			                    <div class="resource" style="color:#eab308">🪙 <span id="res-gold">1500</span></div>
+			                    <button class="mailbox-btn" type="button" onclick="openMailbox()" title="우편함">
+			                        <span>📮 우편함</span>
+			                        <span class="mail-badge" id="mail-badge" style="display:none;">0</span>
+			                    </button>
+			                    <button class="mailbox-btn reset-btn" type="button" onclick="resetGame()" title="데이터 초기화">
+			                        <span>🧹 초기화</span>
+			                    </button>
+			                </div>
+			            </div>
             
             <!-- Affinity Stats (New) -->
             <div class="affinity-stats">
@@ -26,44 +33,171 @@
                 <div class="affinity-badge" title="반항심: 훈련 거부 및 가출 확률" style="color:#ef4444;">⚡ <span id="aff-rebellion">0</span></div>
             </div>
 
-            <div class="bars">
-                <div class="bar-container"><div class="label">HP</div><div class="bar-bg"><div class="bar hp" id="bar-hp" style="width: 100%;"></div></div></div>
-                <div class="bar-container"><div class="label">허기</div><div class="bar-bg"><div class="bar hunger" id="bar-hunger" style="width: 100%;"></div></div></div>
-                <div class="bar-container"><div class="label">EXP</div><div class="bar-bg"><div class="bar exp" id="bar-exp" style="width: 0%;"></div></div></div>
-            </div>
-            
-            <!-- Quest Alert Banner (Hidden by default) -->
-            <div id="quest-alert" class="quest-alert" onclick="openQuestModal()" style="display: none;">
-                ❗ 아들의 부탁이 있습니다! (남은 시간: <span id="quest-timer">30</span>초)
-            </div>
-        </header>
+	            <div class="bars">
+	                <div class="bar-container"><div class="label">HP</div><div class="bar-bg"><div class="bar hp" id="bar-hp" style="width: 100%;"></div></div></div>
+	                <div class="bar-container"><div class="label">허기</div><div class="bar-bg"><div class="bar hunger" id="bar-hunger" style="width: 100%;"></div></div></div>
+	                <div class="bar-container"><div class="label">EXP</div><div class="bar-bg"><div class="bar exp" id="bar-exp" style="width: 0%;"></div></div></div>
+	            </div>
 
-        <!-- 2. Room Navigation Tabs -->
-        <nav class="room-tabs">
-            <button class="room-tab active" data-room="room-bed">🛏️ 침실 <span class="son-indicator">👦🏻</span></button>
-            <button class="room-tab" data-room="room-desk">📚 서재 <span class="son-indicator">👦🏻</span></button>
-            <button class="room-tab" data-room="room-table">🍽️ 주방 <span class="son-indicator">👦🏻</span></button>
-            <button class="room-tab" data-room="room-dummy">🤺 훈련장 <span class="son-indicator">👦🏻</span></button>
+		            <!-- Adventure Info moved to Son info -->
+	            
+	            <!-- Quest Alert Banner (Hidden by default) -->
+	            <div id="quest-alert" class="quest-alert" onclick="openQuestModal()" style="display: none;">
+	                ❗ 아들의 부탁이 있습니다! (남은 시간: <span id="quest-timer">30</span>초)
+	            </div>
+
+                <!-- Next Adventure Buff Info -->
+                <div id="buff-info" class="buff-info" style="display:none;"></div>
+	        </header>
+
+        <!-- Main Categories -->
+        <nav class="main-tabs">
+            <button class="main-tab active" data-view="home">🏠 집</button>
+            <button class="main-tab" data-view="son">👦 아들정보</button>
+            <button class="main-tab" data-view="town">🏘️ 마을</button>
         </nav>
 
-        <!-- 3. Main Stage (Active Room) -->
-        <main class="house-view-container">
-            <div class="room-view active" id="view-room-bed">
-        <div class="furniture bed">🛏️<div class="furn-level">(Lv.<span id="lvl-bed">1</span>)</div></div>
-        <div class="interact-slot" id="slot-wardrobe" onclick="openInventory('weapon')" style="position: absolute; right: 15%; top: 20%;">
-            <span class="slot-label">옷장 (무기)</span>➕
-        </div>
-    </div>
-            <div class="room-view" id="view-room-desk"><div class="furniture desk">📚<div class="furn-level">(Lv.<span id="lvl-desk">1</span>)</div><div class="interact-slot" id="slot-study" onclick="openInventory('study')"><span class="slot-label">책꽂이 빈칸</span>➕</div></div></div>
-            <div class="room-view" id="view-room-table"><div class="furniture table">🍽️<div class="furn-level">(Lv.<span id="lvl-table">1</span>)</div><div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')"><span class="slot-label">식탁 위 빈접시</span>➕</div></div></div>
-            <div class="room-view" id="view-room-dummy"><div class="furniture dummy">🤺<div class="furn-level">(Lv.<span id="lvl-dummy">1</span>)</div><div class="interact-slot" id="slot-training" onclick="openInventory('training')"><span class="slot-label">훈련 도구 슬롯</span>➕</div></div></div>
-            
+        <section class="views">
+            <section class="view active" id="view-home">
+                <!-- 2. Room Navigation Tabs -->
+                <nav class="room-tabs">
+                    <button class="room-tab active" data-room="room-bed">🛏️ 침실 <span class="son-indicator">👦🏻</span></button>
+                    <button class="room-tab" data-room="room-wardrobe">🧥 옷장 <span class="son-indicator">👦🏻</span></button>
+                    <button class="room-tab" data-room="room-desk">📚 서재 <span class="son-indicator">👦🏻</span></button>
+                    <button class="room-tab" data-room="room-table">🍽️ 주방 <span class="son-indicator">👦🏻</span></button>
+                    <button class="room-tab" data-room="room-dummy">🤺 훈련장 <span class="son-indicator">👦🏻</span></button>
+                    <button class="room-tab" data-room="room-farm">🌱 텃밭 <span class="son-indicator">👦🏻</span></button>
+                </nav>
+
+                <!-- 3. Main Stage (Active Room) -->
+                <main class="house-view-container">
+	            <div class="room-view active" id="view-room-bed">
+	        <div class="furniture bed">
+	            <span class="emoji-fallback" aria-hidden="true">🛏️</span>
+	            <img class="pixel-sprite pixel-furniture" data-pixel="bed" src="assets/pixel/bed.png" alt="침대">
+	            <div class="furn-level">강화 Lv.<span id="lvl-bed">1</span></div>
+	            <div class="furn-model" id="model-bed" onclick="openFurnitureSwap('bed')">-</div>
+	        </div>
+	    </div>
+	            <div class="room-view wardrobe-room" id="view-room-wardrobe">
+                    <div class="wardrobe-room-head">
+                        <div>
+                            <h3 style="margin-bottom:2px;">🧥 옷장</h3>
+                            <div style="font-size:0.8rem; color:#64748b;">엄마가 장비를 만지는 동안, 아들은 모험을 떠나지 않아요.</div>
+                        </div>
+                        <button class="wardrobe-close" type="button" onclick="closeWardrobe()">완료</button>
+                    </div>
+
+                    <div class="wardrobe-rack">
+                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="weapon" onclick="openWardrobePicker('weapon')">
+                            <div class="ws-icon">🗡️</div>
+                            <div class="ws-title">무기</div>
+                            <div class="ws-name" id="wb-weapon-name">-</div>
+                            <div class="ws-stat" id="wb-weapon-stat"></div>
+                            <div class="ws-actions">
+                                <button class="ws-btn" type="button" onclick="openWardrobePicker('weapon'); event.stopPropagation();">변경</button>
+                                <button class="ws-btn secondary" type="button" onclick="unequipWeapon(); event.stopPropagation();">해제</button>
+                            </div>
+                        </div>
+                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="helmet" onclick="openWardrobePicker('helmet')">
+                            <div class="ws-icon">🪖</div>
+                            <div class="ws-title">투구</div>
+                            <div class="ws-name" id="wb-helmet-name">-</div>
+                            <div class="ws-stat" id="wb-helmet-stat"></div>
+                            <div class="ws-actions">
+                                <button class="ws-btn" type="button" onclick="openWardrobePicker('helmet'); event.stopPropagation();">변경</button>
+                                <button class="ws-btn secondary" type="button" onclick="unequipGear('helmet'); event.stopPropagation();">해제</button>
+                            </div>
+                        </div>
+                        <div class="wardrobe-center">
+                            <div class="hanger">🪝</div>
+                            <div style="font-size:0.75rem; color:#94a3b8; font-weight:900;">옷걸이</div>
+                        </div>
+                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="armor" onclick="openWardrobePicker('armor')">
+                            <div class="ws-icon">🧥</div>
+                            <div class="ws-title">갑옷</div>
+                            <div class="ws-name" id="wb-armor-name">-</div>
+                            <div class="ws-stat" id="wb-armor-stat"></div>
+                            <div class="ws-actions">
+                                <button class="ws-btn" type="button" onclick="openWardrobePicker('armor'); event.stopPropagation();">변경</button>
+                                <button class="ws-btn secondary" type="button" onclick="unequipGear('armor'); event.stopPropagation();">해제</button>
+                            </div>
+                        </div>
+                        <div class="wardrobe-slot" role="button" tabindex="0" data-wslot="boots" onclick="openWardrobePicker('boots')">
+                            <div class="ws-icon">👢</div>
+                            <div class="ws-title">신발</div>
+                            <div class="ws-name" id="wb-boots-name">-</div>
+                            <div class="ws-stat" id="wb-boots-stat"></div>
+                            <div class="ws-actions">
+                                <button class="ws-btn" type="button" onclick="openWardrobePicker('boots'); event.stopPropagation();">변경</button>
+                                <button class="ws-btn secondary" type="button" onclick="unequipGear('boots'); event.stopPropagation();">해제</button>
+                            </div>
+                        </div>
+                    </div>
+	            </div>
+	            <div class="room-view" id="view-room-desk">
+                    <div class="furniture desk">
+	                    <span class="emoji-fallback" aria-hidden="true">📚</span>
+	                    <img class="pixel-sprite pixel-furniture" data-pixel="desk" src="assets/pixel/desk.png" alt="책상">
+	                    <div class="furn-level">강화 Lv.<span id="lvl-desk">1</span></div>
+                        <div class="furn-model" id="model-desk" onclick="openFurnitureSwap('desk')">-</div>
+                        <div class="interact-slot" id="slot-study" onclick="openInventory('study')"><span class="slot-label">책꽂이 빈칸</span>➕</div>
+                    </div>
+                </div>
+	            <div class="room-view" id="view-room-table">
+	                    <div class="furniture table">
+		                    <span class="emoji-fallback" aria-hidden="true">🍽️</span>
+		                    <img class="pixel-sprite pixel-furniture" data-pixel="table" src="assets/pixel/table.png" alt="식탁">
+		                    <div class="furn-level">강화 Lv.<span id="lvl-table">1</span></div>
+	                        <div class="furn-model" id="model-table" onclick="openFurnitureSwap('table')">-</div>
+	                        <div class="interact-slot" id="slot-kitchen" onclick="openInventory('kitchen')"><span class="slot-label">🍳 요리하기</span>➕</div>
+	                    </div>
+	                </div>
+		            <div class="room-view" id="view-room-dummy">
+	                    <div class="furniture dummy">
+		                    <span class="emoji-fallback" aria-hidden="true">🤺</span>
+		                    <img class="pixel-sprite pixel-furniture" data-pixel="dummy" src="assets/pixel/dummy.png" alt="훈련 더미">
+		                    <div class="furn-level">강화 Lv.<span id="lvl-dummy">1</span></div>
+	                        <div class="furn-model" id="model-dummy" onclick="openFurnitureSwap('dummy')">-</div>
+	                        <div class="furn-sub" id="dummy-training-type">현재 훈련: -</div>
+	                        <div class="interact-slot" id="slot-training" onclick="openInventory('training')"><span class="slot-label">훈련 도구 슬롯</span>➕</div>
+	                    </div>
+	                </div>
+			            <div class="room-view farm-room" id="view-room-farm">
+	                        <div class="hint-card">
+	                            <h3 style="margin-bottom:5px;">🌱 텃밭</h3>
+	                            <p style="font-size:0.85rem; margin-bottom:10px;">빈 밭을 터치해 <b>씨앗 1개</b>로 재배를 시작해요. <b>10~30초</b> 후 수확할 수 있고, 농사 레벨이 오르면 더 좋은 작물이 나옵니다.</p>
+	                            <div class="hint-card" style="margin-top:10px; margin-bottom:10px;">
+	                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+	                                    <b>🌾 농사 레벨</b>
+	                                    <span style="font-weight:900; color:#0f172a;">Lv.<span id="farm-lv">1</span></span>
+	                                </div>
+	                                <div class="bar-bg" style="height:10px; margin-top:10px;">
+	                                    <div class="bar exp" id="farm-xp-bar" style="width:0%"></div>
+	                                </div>
+	                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b; display:flex; justify-content:space-between; gap:10px;">
+	                                    <span>경험치 <b><span id="farm-xp-text">0/6</span></b></span>
+	                                    <span>씨앗 <b><span id="farm-seed">0</span></b></span>
+	                                </div>
+	                            </div>
+	                            <div class="farm-grid" id="farm-grid">
+	                                <!-- farm plots, filled by JS -->
+	                            </div>
+	                            <div style="margin-top:10px; font-size:0.78rem; color:#64748b;">
+	                                텃밭 재료는 주방에서 요리할 때 사용됩니다.
+                            </div>
+                        </div>
+                    </div>
+	            
             <!-- Son Sprite -->
-            <div class="character son" id="son-sprite">
-                <div class="speech-bubble" id="son-speech">뭐 할 거 없나...</div>
-                <div class="son-emoji">👦🏻</div>
-                <div class="son-state-label" id="son-state-label">대기 중...</div>
-            </div>
+	            <div class="character son" id="son-sprite">
+	                <div class="speech-bubble" id="son-speech">뭐 할 거 없나...</div>
+	                <div class="son-emoji">
+	                    <span class="emoji-fallback" aria-hidden="true">👦🏻</span>
+	                    <img class="pixel-sprite pixel-son" data-pixel="son" src="assets/pixel/son_idle.png" alt="아들">
+	                </div>
+	                <div class="son-state-label" id="son-state-label">대기 중...</div>
+	            </div>
 
             <!-- Adventure Live View (shown when son is adventuring) -->
             <div class="adventure-view" id="adventure-view">
@@ -79,76 +213,427 @@
             <button class="upgrade-btn" id="upgrade-desk" onclick="upgradeFurniture('desk')" style="display:none;">⬆️ 서재 업그레이드</button>
             <button class="upgrade-btn" id="upgrade-table" onclick="upgradeFurniture('table')" style="display:none;">⬆️ 주방 업그레이드</button>
             <button class="upgrade-btn" id="upgrade-dummy" onclick="upgradeFurniture('dummy')" style="display:none;">⬆️ 훈련장 업그레이드</button>
-        </main>
+                </main>
+            </section>
 
-        <!-- 4. Bottom Control Panel -->
-        <section class="control-panel">
-            <nav class="sys-tabs">
-                <button class="sys-tab active" data-sys="sys-work">🪡 부업</button>
-                <button class="sys-tab" data-sys="sys-farm">🌱 농사</button>
-                <button class="sys-tab" data-sys="sys-shop">🛒 상점</button>
-                <button class="sys-tab" data-sys="sys-smith">🔨 대장간</button>
-                <button class="sys-tab" data-sys="sys-mail">✉️ 모험</button>
-            </nav>
-            <div class="sys-content active" id="sys-work">
-                <h3 style="margin-bottom:5px;">집안일 (부업)</h3>
-                <p style="font-size:0.85rem; margin-bottom:10px;">아들 몰래 인형 눈알을 붙여 용돈을 법니다.</p>
-                <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.2rem;">🪡 바느질 하기 (+10 골드)</button>
-            </div>
-            <div class="sys-content" id="sys-farm">
-                <h3 style="margin-bottom:5px;">🌱 텃밭 (농사)</h3>
-                <p style="font-size:0.85rem; margin-bottom:10px;">씨앗을 심고 수확해서 요리 재료를 얻으세요.</p>
-                <div class="farm-grid" id="farm-grid">
-                    <!-- 3 farm plots, filled by JS -->
-                </div>
-                <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
-                    <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🍳 요리하기</h4>
-                    <div id="cook-list" style="display:flex; flex-direction:column; gap:6px;"></div>
-                </div>
-            </div>
-            <div class="sys-content" id="sys-shop">
-                <h3 style="margin-bottom:5px;">상점 (아이템 구매)</h3>
-                <p style="font-size:0.85rem; margin-bottom:10px;">방에 배치할 아이템을 미리 구매해두세요.</p>
-                <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
-                    <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyItem('steak', 100)">🥩 최고급 스테이크 (100G) - 허기폭발</button>
-                    <button class="action-btn" style="background:#8b5cf6; margin-top:0;" onclick="buyItem('book_hero', 150)">📘 영웅학 개론 (150G) - 경험치폭발</button>
-                    <button class="action-btn" style="background:#f59e0b; margin-top:0;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니 (200G) - 훈련효율업</button>
-                </div>
-            </div>
-            <div class="sys-content" id="sys-smith">
-        <h3>대장간 (장비 가챠 & 합성)</h3>
-        <p style="font-size:0.85rem; margin-bottom:10px;">가챠로 뽑은 무기는 인벤토리에 보관되며, 같은 등급 3개를 모아 상위 등급으로 합성할 수 있습니다.</p>
-        <button class="action-btn" id="btn-gacha" style="background-color: #0f172a; margin-top:0;">🗡️ 무기 뽑기 (1,000G)</button>
-        <div id="gacha-result" class="gacha-result" style="margin-bottom: 15px;"></div>
-        
-        <div id="synthesis-ui" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; margin-top:15px;">
-            <h4 style="font-size:0.9rem; color:#475569; margin-bottom:8px;">무기 인벤토리 & 합성</h4>
-            <div id="weapon-inventory-list" style="display:flex; flex-direction:column; gap:5px;">
-                <!-- Filled dynamically by JS -->
-            </div>
-        </div>
-    </div>
-            <div class="sys-content" id="sys-mail">
-                <h3>우편함 & 마을 소문</h3>
-                <ul class="mail-list" style="list-style:none;">
-                    <li class="mail-item" style="padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">📮 아직 도착한 편지가 없습니다.</li>
-                </ul>
-            </div>
-        </section>
+            <section class="view" id="view-son">
+                <div class="panel-scroll">
+	                    <div class="panel-section" id="sys-son">
+	                        <h3 style="margin-bottom:5px;">아들 프로필</h3>
+	                        <div class="segmented" style="margin-top:8px;">
+	                            <button class="seg-btn active" data-son-tab="summary" onclick="setSonTab('summary')">🧾 요약</button>
+	                            <button class="seg-btn" data-son-tab="gear" onclick="setSonTab('gear')">🎒 장비</button>
+	                            <button class="seg-btn" data-son-tab="world" onclick="setSonTab('world')">🗺️ 세계</button>
+	                        </div>
+
+	                        <div class="son-tab active" id="son-tab-summary">
+	                        <div class="hint-card" style="margin-top:8px;">
+	                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+	                                <div><b>전투력</b> <span style="color:#94a3b8; font-size:0.85rem;">(CP)</span></div>
+	                                <div style="font-weight:900; font-size:1.2rem; color:#0f172a;"><span id="son-cp">0</span></div>
+                            </div>
+                            <div style="margin-top:6px; font-size:0.8rem; color:#64748b;">
+                                Lv.<span id="son-level-2">1</span> · HP <span id="son-hp-2">0</span>/<span id="son-hpmax-2">0</span> · 허기 <span id="son-hunger-2">0</span>/<span id="son-hungermax-2">0</span>
+                            </div>
+                            <div class="stat-chips" style="margin-top:10px;">
+                                <span class="stat-chip">⚔️ 공격 <b><span id="son-atk-total">0</span></b></span>
+                                <span class="stat-chip">🛡️ 방어 <b><span id="son-def-total">0</span></b></span>
+                                <span class="stat-chip">🧰 장비 공 <b><span id="son-eq-atk">0</span></b></span>
+                                <span class="stat-chip">🧰 장비 방 <b><span id="son-eq-def">0</span></b></span>
+                            </div>
+                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b; line-height:1.35;">
+                                공격/방어는 <b>장비 + 훈련 스탯</b>이 합쳐진 값이에요.
+                            </div>
+                            <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                                <div id="son-injury" style="font-size:0.8rem; color:#10b981; font-weight:700;">🩹 건강</div>
+                                <button id="btn-hospital" class="seg-btn" style="display:none; flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="treatInjuryAtHospital()">🏥 치료</button>
+                            </div>
+                            <div id="son-injury-desc" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
+
+                            <div style="margin-top:10px; border-top:1px solid #e2e8f0; padding-top:10px;">
+                                <b>훈련 스탯</b>
+                                <div class="stat-chips" style="margin-top:10px;">
+                                    <span class="stat-chip">⚔️ 물공 <b><span id="stat-physatk">0</span></b></span>
+                                    <span class="stat-chip">✨ 마공 <b><span id="stat-magatk">0</span></b></span>
+                                    <span class="stat-chip">🛡️ 마저 <b><span id="stat-magres">0</span></b></span>
+                                    <span class="stat-chip">🏃 민첩 <b><span id="stat-agi">0</span></b></span>
+                                    <span class="stat-chip">🎯 명중 <b><span id="stat-acc">0</span></b></span>
+                                </div>
+                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">훈련으로 오르는 스탯은 영구적으로 누적됩니다.</div>
+                            </div>
+                        </div>
+
+	                        <div class="hint-card" style="margin-top:10px;">
+	                            <b>성향</b>
+	                            <div style="margin-top:8px;">
+	                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+	                                    <span>🧗 대담</span><span>🪵 신중</span>
+                                </div>
+                                <div class="trait-bar"><div class="trait-fill" id="trait-bravery" style="width:50%"></div></div>
+                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+                                    <span>🗓️ 성실</span><span>🎲 즉흥</span>
+                                </div>
+                                <div class="trait-bar"><div class="trait-fill alt" id="trait-diligence" style="width:50%"></div></div>
+	                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+	                                    <span>😇 선함</span><span>😈 악함</span>
+	                                </div>
+	                                <div class="trait-bar"><div class="trait-fill" id="trait-morality" style="width:50%"></div></div>
+	                                <div style="margin-top:6px; display:flex; justify-content:space-between; font-size:0.8rem; color:#475569; font-weight:800;">
+	                                    <span>🪨 완고</span><span>🌿 유연</span>
+	                                </div>
+	                                <div class="trait-bar"><div class="trait-fill alt" id="trait-flexibility" style="width:50%"></div></div>
+                            </div>
+	                            <div id="trait-summary" style="margin-top:8px; font-size:0.8rem; color:#475569;"></div>
+	                            <div id="trait-code" style="margin-top:8px; font-size:0.78rem; color:#64748b;"></div>
+	                        </div>
+
+	                        <div class="hint-card" style="margin-top:10px;">
+	                            <b>직업(계통)</b>
+	                            <div id="son-job" style="margin-top:8px; font-size:1.0rem; font-weight:1000; color:#0f172a;">-</div>
+	                            <div id="son-job-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b; line-height:1.35;">-</div>
+	                        </div>
+
+			                        <div class="hint-card goal-card" style="margin-top:10px;">
+			                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+			                                <b>🎯 목표 보드</b>
+			                                <button class="seg-btn" type="button" style="flex:0 0 auto; padding:8px 10px; font-size:0.8rem;" onclick="setSonTab('world')">🗺️ 도감</button>
+			                            </div>
+			                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">엄마는 유도만, 선택은 아들의 몫이에요.</div>
+
+			                            <div style="margin-top:10px;">
+			                                <div style="font-size:0.78rem; color:#64748b; font-weight:900;">현재 목표</div>
+			                                <div id="next-goal" style="margin-top:6px; font-size:0.88rem; color:#0f172a; font-weight:1000;">-</div>
+			                                <div id="next-goal-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b;">성향과 전투력에 따라 아들이 목표를 정합니다.</div>
+			                                <div id="goal-reason" style="margin-top:8px; font-size:0.8rem; color:#475569; line-height:1.35;"></div>
+			                            </div>
+
+			                            <div style="margin-top:10px; border-top:1px solid #e2e8f0; padding-top:10px;">
+			                                <div style="font-size:0.78rem; color:#64748b; font-weight:900;">엄마의 서포트 (핀)</div>
+			                                <div id="support-pin" style="margin-top:8px;"></div>
+			                                <div id="support-suggestions" style="margin-top:8px;"></div>
+			                            </div>
+
+			                            <div style="margin-top:10px; border-top:1px solid #e2e8f0; padding-top:10px;">
+			                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+			                                    <div style="font-size:0.78rem; color:#64748b; font-weight:900;">🗺️ 장기 목표</div>
+			                                    <div id="long-goals-meta" style="font-size:0.78rem; color:#0f172a; font-weight:1000;">-</div>
+			                                </div>
+			                                <div id="long-goals" style="margin-top:8px;"></div>
+			                                <div id="last-choice" style="margin-top:10px; font-size:0.78rem; color:#64748b;"></div>
+			                            </div>
+			                        </div>
+		                        <div class="hint-card" style="margin-top:10px;">
+		                            <b>아들 현재 상태</b>
+		                            <div id="son-adventure-info" style="margin-top:8px; font-size:0.85rem; color:#0f172a; font-weight:900;">-</div>
+		                            <div id="son-adventure-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b;"></div>
+		                        </div>
+		                        </div>
+
+		                        <div class="son-tab" id="son-tab-gear">
+		                            <div class="hint-card" style="margin-top:10px;">
+		                                <b>착용 장비</b>
+		                                <div class="gear-grid" style="margin-top:10px;">
+			                                <div class="gear-slot">
+		                                        <div class="gear-title">🗡️ 무기</div>
+		                                        <div class="gear-name" id="eq-weapon">-</div>
+		                                        <button class="gear-btn" onclick="openWardrobe('weapon')">옷장에서 변경</button>
+		                                    </div>
+		                                    <div class="gear-slot">
+		                                        <div class="gear-title">🪖 투구</div>
+		                                        <div class="gear-name" id="eq-helmet">-</div>
+		                                        <div class="gear-actions">
+		                                            <button class="gear-btn" onclick="openWardrobe('helmet')">옷장에서 변경</button>
+		                                            <button class="gear-btn secondary" onclick="unequipGear('helmet')">해제</button>
+		                                        </div>
+		                                    </div>
+		                                    <div class="gear-slot">
+		                                        <div class="gear-title">🧥 갑옷</div>
+		                                        <div class="gear-name" id="eq-armor">-</div>
+		                                        <div class="gear-actions">
+		                                            <button class="gear-btn" onclick="openWardrobe('armor')">옷장에서 변경</button>
+		                                            <button class="gear-btn secondary" onclick="unequipGear('armor')">해제</button>
+		                                        </div>
+		                                    </div>
+		                                    <div class="gear-slot">
+		                                        <div class="gear-title">👢 신발</div>
+		                                        <div class="gear-name" id="eq-boots">-</div>
+		                                        <div class="gear-actions">
+		                                            <button class="gear-btn" onclick="openWardrobe('boots')">옷장에서 변경</button>
+		                                            <button class="gear-btn secondary" onclick="unequipGear('boots')">해제</button>
+		                                        </div>
+		                                    </div>
+		                                </div>
+		                                <div style="margin-top:8px; font-size:0.8rem; color:#64748b;">장비를 바꾸면 전투력과 성장 속도가 달라집니다.</div>
+		                            </div>
+		                        </div>
+
+		                        <div class="son-tab" id="son-tab-world">
+		                            <div class="hint-card" style="margin-top:10px;">
+		                                <b>🗺️ 세계 도감</b>
+		                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">아들이 탐험한 던전은 점점 더 자세히 알 수 있어요. (새로고침해도 기록이 남습니다)</div>
+		                                <div id="world-codex-list" style="margin-top:10px;"></div>
+		                            </div>
+		                        </div>
+	                    </div>
+	                </div>
+	            </section>
+
+            <section class="view" id="view-town">
+                <div class="town-panel">
+	                    <div class="town-hub" id="town-hub">
+	                        <button class="town-card" type="button" data-town="life">
+	                            <div class="town-card-badge" id="badge-life" style="display:none;"></div>
+	                            <div class="town-card-title">🌿 생활</div>
+	                            <div class="town-card-desc">아들이 없는 동안, 엄마가 할 수 있는 일들.</div>
+	                            <div class="town-card-sub">🪡 부업</div>
+	                        </button>
+		                        <button class="town-card" type="button" data-town="shop">
+		                            <div class="town-card-badge" id="badge-shop" style="display:none;"></div>
+		                            <div class="town-card-title">🛒 상점</div>
+		                            <div class="town-card-desc">필요한 물건과 재료를 미리 사둬요.</div>
+		                            <div class="town-card-sub">🛒 구매</div>
+		                        </button>
+		                        <button class="town-card" type="button" data-town="smith">
+		                            <div class="town-card-badge" id="badge-smith" style="display:none;"></div>
+		                            <div class="town-card-title">🔨 대장간</div>
+		                            <div class="town-card-desc">뽑기/합성/제작으로 아들의 다음 모험을 준비해요.</div>
+		                            <div class="town-card-sub">🎲 뽑기 · 🧱 합성 · 🧵 제작</div>
+		                        </button>
+		                        <!-- Adventure moved to Son info + Mailbox -->
+		                    </div>
+
+                    <div class="town-detail" id="town-detail" style="display:none;">
+                        <div class="town-detail-header">
+                            <button class="town-back" id="btn-town-back" type="button">← 마을</button>
+                            <div class="town-detail-title" id="town-title">마을</div>
+                        </div>
+                        <div class="town-subtabs" id="town-subtabs" style="display:none;"></div>
+                        <div class="town-detail-body">
+	                    <div class="sys-content active" id="sys-work">
+	                        <h3 style="margin-bottom:5px;">집안일 (부업)</h3>
+	                        <p style="font-size:0.85rem; margin-bottom:10px;">아들 몰래 인형 눈알을 붙여 용돈을 법니다.</p>
+	                        <div class="hint-card" style="margin-top:8px; margin-bottom:10px;">
+	                            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+	                                <b>🪡 부업 숙련</b>
+	                                <span style="font-weight:900; color:#0f172a;">Lv.<span id="work-lv">1</span></span>
+	                            </div>
+	                            <div class="bar-bg" style="height:10px; margin-top:10px;">
+	                                <div class="bar exp" id="work-xp-bar" style="width:0%"></div>
+	                            </div>
+	                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b; display:flex; justify-content:space-between; gap:10px;">
+	                                <span>숙련도 <b><span id="work-xp-text">0/8</span></b></span>
+	                                <span>💤 에너지 <b><span id="work-energy-text">0/0</span></b> · 다음 회복 <b><span id="work-energy-next">-</span></b></span>
+	                            </div>
+	                            <div class="bar-bg" style="height:10px; margin-top:8px;">
+	                                <div class="bar energy" id="work-energy-bar" style="width:0%"></div>
+	                            </div>
+	                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">부업을 많이 할수록, 한 번에 버는 골드가 아주 조금씩 늘어납니다. 대신 에너지가 필요해요.</div>
+	                        </div>
+	                        <button class="action-btn" id="btn-work" style="background:#64748b; padding:20px; font-size:1.1rem;">🪡 바느질 하기</button>
+	                    </div>
+	                    <div class="sys-content" id="sys-shop">
+	                        <h3 style="margin-bottom:5px;">상점 (아이템 구매)</h3>
+	                        <p style="font-size:0.85rem; margin-bottom:10px;">필요한 도구/재료를 미리 준비해두세요.</p>
+	                        <div class="segmented" style="margin-top:8px;">
+	                            <button class="seg-btn active" data-shop-tab="grocery" onclick="setShopTab('grocery')">🥕 식료품점</button>
+	                            <button class="seg-btn" data-shop-tab="general" onclick="setShopTab('general')">🧺 잡화점</button>
+	                            <button class="seg-btn" data-shop-tab="book" onclick="setShopTab('book')">📚 서점</button>
+	                        </div>
+
+	                        <div class="shop-tab active" id="shop-tab-grocery">
+			                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+			                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🍳 요리 재료</h4>
+			                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('meat', 60, 1)">🥩 고기 (60G)</button>
+			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('salt', 15, 1)">🧂 소금 (15G)</button>
+		                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('carrot', 20, 1)">🥕 당근 (20G)</button>
+			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('tomato', 25, 1)">🍅 토마토 (25G)</button>
+			                                <button class="action-btn" style="background:#10b981; margin-top:0;" onclick="buyIngredient('herb', 35, 1)">🌿 약초 (35G)</button>
+			                            </div>
+			                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">구매한 재료는 <b>집(텃밭/주방)</b>에서 요리에 사용됩니다.</div>
+			                        </div>
+	                        </div>
+
+	                        <div class="shop-tab" id="shop-tab-general">
+	                            <div style="display:grid; grid-template-columns: 1fr; gap:10px; margin-top:12px;">
+	                                <button class="action-btn" style="background:#f59e0b; margin-top:0;" onclick="buyItem('sandbag', 200)">🏋️ 모래주머니 (200G) - 훈련효율업</button>
+	                            </div>
+			                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+			                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🌱 씨앗</h4>
+			                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+			                                <button class="action-btn" style="background:#22c55e; margin-top:0;" onclick="buySeed(20, 1)">🌱 씨앗 (20G)</button>
+			                                <button class="action-btn" style="background:#16a34a; margin-top:0;" onclick="buySeed(90, 5)">🌱 씨앗 묶음 x5 (90G)</button>
+			                            </div>
+			                            <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">씨앗은 <b>텃밭 수확 뽑기</b>에 사용됩니다.</div>
+			                        </div>
+		                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+		                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🧰 장비 구매</h4>
+	                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+	                                <button class="action-btn" style="background:#0ea5e9; margin-top:0;" onclick="buyGear('helmet', 'leather_helmet')">🪖 가죽 투구 (200G)</button>
+	                                <button class="action-btn" style="background:#0ea5e9; margin-top:0;" onclick="buyGear('armor', 'leather_armor')">🧥 가죽 갑옷 (350G)</button>
+	                                <button class="action-btn" style="background:#0ea5e9; margin-top:0;" onclick="buyGear('boots', 'leather_boots')">👢 가죽 신발 (180G)</button>
+	                            </div>
+	                        </div>
+	                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+	                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🧱 제작 재료</h4>
+	                            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+	                                <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="buyMaterial('leather', 40, 1)">🧵 가죽 (40G)</button>
+	                                <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="buyMaterial('steel', 80, 1)">🪨 강철 (80G)</button>
+	                            </div>
+	                        </div>
+	                        <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+	                            <h4 style="font-size:0.85rem; color:#475569; margin-bottom:8px;">🏠 가구 상점 (모델)</h4>
+	                            <p style="font-size:0.8rem; color:#64748b; margin-bottom:10px;">구매한 가구 모델은 사라지지 않으며, 집에서 언제든 교체할 수 있어요. 강화는 슬롯 강화라 교체해도 유지됩니다.</p>
+	                            <div id="furn-shop"></div>
+	                        </div>
+	                        </div>
+
+	                        <div class="shop-tab" id="shop-tab-book">
+	                            <div class="hint-card" style="margin-top:12px;">
+	                                <b>📚 오늘의 입고</b>
+	                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">새 책은 <b>5분</b>마다 바뀝니다. 한 번 산 책은 다시 구매할 수 없어요.</div>
+	                                <div style="margin-top:8px; font-size:0.82rem; color:#0f172a; font-weight:900;">
+	                                    다음 입고까지: <span id="bookstore-timer">-</span>
+	                                </div>
+	                            </div>
+	                            <div id="bookstore-stock" style="margin-top:10px;"></div>
+	                            <div class="hint-card" style="margin-top:12px;">
+	                                <b>📚 책장</b>
+	                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">책장을 업그레이드하면 <b>동시에 여러 권(최대 5권)</b>을 배치할 수 있어요. 아들은 좋아하는 책만 읽을지도 몰라요.</div>
+	                                <button class="action-btn" id="btn-bookshelf-upgrade" style="background:#0f172a; margin-top:10px;" onclick="buyBookshelfUpgrade()">📚 책장 업그레이드</button>
+	                                <div id="bookshelf-upgrade-desc" style="margin-top:8px; font-size:0.78rem; color:#64748b;"></div>
+	                            </div>
+	                        </div>
+	                    </div>
+			                    <div class="sys-content" id="sys-smith">
+			                        <h3 id="smithy-h3">대장간</h3>
+			                        <p style="font-size:0.85rem; margin-bottom:10px;">뽑기/합성/제작으로 아들의 다음 모험을 준비하세요.</p>
+			                        <div class="segmented" style="margin-top:8px;">
+			                            <button class="seg-btn active" data-smith-tab="gacha" onclick="setSmithyTab('gacha')">🎲 뽑기</button>
+			                            <button class="seg-btn" data-smith-tab="synth" onclick="setSmithyTab('synth')">🧱 합성</button>
+			                            <button class="seg-btn" data-smith-tab="craft" onclick="setSmithyTab('craft')">✨ 제작</button>
+		                        </div>
+
+			                        <div class="smith-tab active" id="smith-tab-gacha">
+			                            <div class="hint-card" style="margin-top:10px; margin-bottom:10px;">
+		                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+		                                    <b>🎲 뽑기 숙련도</b>
+		                                    <span style="font-weight:900; color:#0f172a;">Lv.<span id="smith-lv">1</span></span>
+		                                </div>
+		                                <div class="bar-bg" style="height:10px; margin-top:10px;">
+		                                    <div class="bar exp" id="smith-xp-bar" style="width:0%"></div>
+		                                </div>
+		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b; display:flex; justify-content:space-between; gap:10px;">
+		                                    <span>숙련도 <b><span id="smith-xp-text">0/10</span></b></span>
+		                                    <span id="smith-bonus-text">고급 무기 확률 보정 +0%</span>
+		                                </div>
+		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">뽑기를 많이 할수록, 더 좋은 무기가 나올 확률이 조금씩 올라갑니다.</div>
+			                                <div id="smith-buff-text" style="margin-top:6px; font-size:0.78rem; color:#0ea5e9; font-weight:900;"></div>
+			                            </div>
+			                            <div class="hint-card" style="margin-top:10px; margin-bottom:10px;">
+			                                <b>해금</b>
+			                                <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; font-size:0.8rem;">
+			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+			                                        <span>🧱 숙련 교환</span><span id="unlock-exchange-state" style="font-weight:900; color:#94a3b8;">Lv.3 필요</span>
+			                                    </div>
+			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+			                                        <span>🎲 고급 뽑기</span><span id="unlock-premium-state" style="font-weight:900; color:#94a3b8;">Lv.5 필요</span>
+			                                    </div>
+			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+			                                        <span>✨ 정련(행운)</span><span id="unlock-temper-state" style="font-weight:900; color:#94a3b8;">Lv.7 필요</span>
+			                                    </div>
+			                                    <div style="display:flex; justify-content:space-between; gap:10px;">
+			                                        <span>📜 특별 주문</span><span id="unlock-order-state" style="font-weight:900; color:#94a3b8;">Lv.10 필요</span>
+			                                    </div>
+			                                </div>
+			                            </div>
+			                            <button class="action-btn" id="btn-gacha" style="background-color: #0f172a; margin-top:10px;">🗡️ 무기 뽑기 (1,000G)</button>
+			                            <button class="action-btn" id="btn-gacha-premium" style="background-color: #8b5cf6; margin-top:8px;" disabled>🎲 고급 무기 뽑기 (2,500G)</button>
+			                            <div id="gacha-result" class="gacha-result" style="margin-bottom: 15px;"></div>
+			                            <div class="hint-card" style="margin-top:10px;">
+		                                <b>고급 서비스</b>
+		                                <div style="margin-top:6px; font-size:0.78rem; color:#64748b;">정련은 뽑기 운을 올리고, 특별 주문은 고급 무기를 바로 주문합니다.</div>
+		                                <button class="action-btn" id="btn-temper" style="background-color: #0ea5e9; margin-top:10px;" disabled>✨ 정련 (철 조각 8 + 마력 가루 2)</button>
+		                                <button class="action-btn" id="btn-special-order" style="background-color: #f59e0b; color:#1e293b; margin-top:8px;" disabled>📜 특별 주문 (6,000G + 마력 가루 6)</button>
+		                            </div>
+		                        </div>
+
+		                        <div class="smith-tab" id="smith-tab-synth">
+		                            <div id="synthesis-ui" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; margin-top:10px;">
+		                                <h4 style="font-size:0.9rem; color:#475569; margin-bottom:8px;">무기 인벤토리 & 합성</h4>
+		                                <div id="weapon-inventory-list" style="display:flex; flex-direction:column; gap:5px;">
+		                                    <!-- Filled dynamically by JS -->
+		                                </div>
+		                            </div>
+		                            <div class="hint-card" style="margin-top:10px;">
+		                                <b>부산물</b>
+		                                <div style="margin-top:6px; font-size:0.82rem; color:#475569; display:flex; justify-content:space-between; gap:10px;">
+		                                    <span>🧩 철 조각: <b><span id="cnt-iron-scrap">0</span></b></span>
+		                                    <span>✨ 마력 가루: <b><span id="cnt-arcane-dust">0</span></b></span>
+		                                </div>
+		                                <div style="margin-top:10px; display:grid; grid-template-columns:1fr; gap:8px;">
+		                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 5, 'steel', 1)">🪨 강철 교환 (철 조각 5 → 강철 1)</button>
+		                                    <button class="action-btn" style="background:#64748b; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 5, 'magic_crystal', 1)">💎 마법 결정 교환 (마력 가루 5 → 결정 1)</button>
+		                                    <button class="action-btn" id="btn-exchange-steel-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('iron_scrap', 4, 'steel', 1)" disabled>🪨 숙련 교환 (철 조각 4 → 강철 1)</button>
+		                                    <button class="action-btn" id="btn-exchange-crystal-pro" style="background:#334155; margin-top:0;" onclick="exchangeByproduct('arcane_dust', 4, 'magic_crystal', 1)" disabled>💎 숙련 교환 (마력 가루 4 → 결정 1)</button>
+		                                </div>
+		                                <div style="margin-top:8px; font-size:0.78rem; color:#64748b;">무기 합성 시 부산물이 생깁니다. 방어구 승급에 보탤 수 있어요.</div>
+		                            </div>
+		                        </div>
+
+		                        <div class="smith-tab" id="smith-tab-craft">
+		                            <h4 style="margin-top:10px; margin-bottom:8px; color:#475569;">🧵 장비 제작 / 승급</h4>
+		                            <p style="font-size:0.85rem; margin-bottom:10px;">모험 전리품과 재료로 다음 단계 장비를 준비하세요. 목록은 전부 공개되며, 하나하나가 목표가 됩니다.</p>
+		                            <div id="craft-list"></div>
+		                        </div>
+		                    </div>
+		                        </div>
+		                    </div>
+	                </div>
+	            </section>
+	        </section>
 
         <!-- Inventory Modal -->
         <div class="modal-overlay" id="inv-modal">
             <div class="modal-content">
                 <h3>인벤토리</h3>
-                <p style="font-size:0.85rem; margin-bottom:15px;">이 방에 배치할 아이템을 선택하세요.</p>
+                <p id="inv-desc" style="font-size:0.85rem; margin-bottom:15px;">이 방에 배치할 아이템을 선택하세요.</p>
                 <div id="inv-list"></div>
                 <button class="action-btn" style="background:#ef4444; margin-top:15px;" onclick="closeInventory()">닫기</button>
             </div>
         </div>
 
-        <!-- Quest Modal -->
-        <div class="modal-overlay" id="quest-modal">
-            <div class="modal-content">
+	        <!-- Furniture Swap Modal -->
+	        <div class="modal-overlay" id="furn-modal">
+	            <div class="modal-content furn-modal-content">
+                <div class="furn-modal-head">
+                    <div>
+                        <h3 style="margin-bottom:2px;" id="furn-modal-title">가구 교체</h3>
+                        <div style="font-size:0.8rem; color:#64748b;" id="furn-modal-sub">보유한 모델을 골라 설치하세요.</div>
+                    </div>
+                    <button class="wardrobe-close" type="button" onclick="closeFurnitureSwap()">닫기</button>
+                </div>
+                <div id="furn-modal-list" style="margin-top:12px;"></div>
+            </div>
+	        </div>
+
+	        <!-- Mailbox Modal -->
+	        <div class="modal-overlay" id="mailbox-modal">
+	            <div class="modal-content furn-modal-content">
+	                <div class="furn-modal-head">
+	                    <div>
+	                        <h3 style="margin-bottom:2px;">📮 우편함</h3>
+	                        <div style="font-size:0.8rem; color:#64748b;">최근 10개만 보관됩니다.</div>
+	                    </div>
+	                    <button class="wardrobe-close" type="button" onclick="closeMailbox()">닫기</button>
+	                </div>
+	                <ul class="mail-list" id="mailbox-list" style="list-style:none; margin-top:12px;"></ul>
+	            </div>
+	        </div>
+
+	        <!-- Quest Modal -->
+	        <div class="modal-overlay" id="quest-modal">
+	            <div class="modal-content">
                 <h3 style="color:#eab308;">❗ 아들의 부탁 ❗</h3>
                 <p id="quest-desc" style="font-size:0.95rem; margin:15px 0; font-weight:bold; color:#1e293b;"></p>
                 <p style="font-size:0.8rem; color:#ef4444; margin-bottom:15px;">⏰ 남은 시간: <span id="quest-modal-timer">30</span>초</p>
@@ -158,6 +643,7 @@
                 </div>
             </div>
         </div>
+
     </div>
 
     <!-- Toast Container -->

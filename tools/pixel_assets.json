@@ -1,0 +1,81 @@
+{
+  "model": "gemini-3-pro-image-preview",
+  "imageSize": "1K",
+  "style": {
+    "text": [
+      "따뜻하고 감성적인 코지 판타지 무드의 픽셀 아트.",
+      "픽셀 그리드 느낌이 확실해야 함(안티앨리어싱/블러/그라데이션 최소화).",
+      "제한된 파스텔 팔레트(따뜻한 노란 조명), 과한 디테일 금지.",
+      "배경은 완전 투명(스프라이트 PNG), 오브젝트 1개만 중앙 배치, 텍스트/워터마크 금지.",
+      "동일한 화풍(선 두께/명암/비율) 유지."
+    ]
+  },
+  "assets": [
+    {
+      "id": "style_reference",
+      "out": "style_reference.png",
+      "aspectRatio": "1:1",
+      "prompt": "스타일 레퍼런스 시트: 2x3 격자에 (아들 전신, 침대, 책상, 식탁, 훈련 더미, 따뜻한 조명 작은 소품 1개) 를 같은 화풍으로 배치. 각 칸은 단색 투명 배경 위에 오브젝트만. 텍스트/라벨 없음."
+    },
+    {
+      "id": "bed",
+      "out": "bed.png",
+      "aspectRatio": "1:1",
+      "prompt": "아늑한 1인용 침대(이불이 살짝 덮여 있고 따뜻한 느낌). 정면 2D 아이콘처럼 읽히게."
+    },
+    {
+      "id": "desk",
+      "out": "desk.png",
+      "aspectRatio": "1:1",
+      "prompt": "작은 나무 책상 + 책 몇 권(서재 느낌). 정면 2D 아이콘처럼 읽히게."
+    },
+    {
+      "id": "table",
+      "out": "table.png",
+      "aspectRatio": "1:1",
+      "prompt": "작은 식탁(접시 1개 정도). 주방/식사 느낌. 정면 2D 아이콘처럼 읽히게."
+    },
+    {
+      "id": "dummy",
+      "out": "dummy.png",
+      "aspectRatio": "1:1",
+      "prompt": "훈련용 허수아비/표적 더미(가볍게 판타지 느낌). 정면 2D 아이콘처럼 읽히게."
+    },
+    {
+      "id": "son_idle",
+      "out": "son_idle.png",
+      "aspectRatio": "3:4",
+      "prompt": "귀여운 8~10살 남자아이(아들) 치비 픽셀 스프라이트. 중립 표정, 대기 상태."
+    },
+    {
+      "id": "son_sleeping",
+      "out": "son_sleeping.png",
+      "aspectRatio": "3:4",
+      "prompt": "같은 아들 캐릭터. 졸린/자는 표정(수면 상태)."
+    },
+    {
+      "id": "son_eating",
+      "out": "son_eating.png",
+      "aspectRatio": "3:4",
+      "prompt": "같은 아들 캐릭터. 먹는 포즈(식사 상태)."
+    },
+    {
+      "id": "son_training",
+      "out": "son_training.png",
+      "aspectRatio": "3:4",
+      "prompt": "같은 아들 캐릭터. 훈련하는 포즈(주먹/검 휘두르기 느낌)."
+    },
+    {
+      "id": "son_studying",
+      "out": "son_studying.png",
+      "aspectRatio": "3:4",
+      "prompt": "같은 아들 캐릭터. 책을 들여다보는 포즈(공부 상태)."
+    },
+    {
+      "id": "son_adventuring",
+      "out": "son_adventuring.png",
+      "aspectRatio": "3:4",
+      "prompt": "같은 아들 캐릭터. 모험 떠나는 포즈(작은 배낭/의욕)."
+    }
+  ]
+}
