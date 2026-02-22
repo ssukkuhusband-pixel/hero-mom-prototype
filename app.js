@@ -1570,16 +1570,7 @@ const els = {
     debugModal: document.getElementById('debug-modal'),
     debugContent: document.getElementById('debug-content'),
     sonStateLabel: document.getElementById('son-state-label'),
-    // New elements
-    adventureView: document.getElementById('adventure-view'),
-    advSceneEmoji: document.getElementById('adv-scene-emoji'),
-    advSceneText: document.getElementById('adv-scene-text'),
-    advSceneSub: document.getElementById('adv-scene-sub'),
-    advProgress: document.getElementById('adv-progress'),
     btnEncourage: document.getElementById('btn-encourage'),
-    adventureInfo: document.getElementById('adventure-info'),
-    advEta: document.getElementById('adv-eta'),
-    advLast: document.getElementById('adv-last'),
     farmGrid: document.getElementById('farm-grid'),
     cookList: document.getElementById('cook-list'),
     buffInfo: document.getElementById('buff-info'),
@@ -1977,18 +1968,6 @@ const sonDialogues = {
     'IDLE': ["심심해~", "뭐 할 거 없나...", "엄마 뭐해?", "모험 가고 싶다!"],
     'ADVENTURING': ["모험 중!", "몬스터다!", "앞으로!"]
 };
-
-// --- Adventure Scenes ---
-const adventureScenes = [
-    { tick: 0, emoji: '🚶', text: '아들이 모험을 떠났습니다', sub: '마을을 벗어나는 중...' },
-    { tick: 8, emoji: '🌲', text: '숲 입구에 도착!', sub: '조심조심 들어가는 중' },
-    { tick: 15, emoji: '🐺', text: '늑대 무리와 조우!', sub: '전투 중...' },
-    { tick: 22, emoji: '⚔️', text: '늑대를 물리쳤다!', sub: '전리품을 줍는 중' },
-    { tick: 30, emoji: '🏔️', text: '산 중턱에 도달', sub: '더 깊이 탐험하는 중...' },
-    { tick: 38, emoji: '🐉', text: '강적 등장!', sub: '필사적으로 싸우는 중!' },
-    { tick: 48, emoji: '🏆', text: '승리! 보물 발견!', sub: '귀환 준비 중...' },
-    { tick: 55, emoji: '🏠', text: '집으로 돌아오는 중', sub: '곧 도착합니다...' }
-];
 
 // ============================================================
 // Adventure difficulty (son decides by personality)
@@ -5937,9 +5916,6 @@ function updateUI() {
             }
         });
 
-        // Adventure view toggle
-        // 기본은 실황 비공개(걱정/반가움 강화): 집 화면 유지
-        if (els.adventureView) els.adventureView.classList.remove('active');
         // Son sprite should not appear while adventuring (prevents UI overlap, also fixes reload state)
         if (els.sprite) {
             els.sprite.style.display = (gameState.son.state === 'ADVENTURING') ? 'none' : 'block';
@@ -5948,6 +5924,7 @@ function updateUI() {
         // Son info: adventure status
         const advInfoEl = document.getElementById('son-adventure-info');
         const advSubEl = document.getElementById('son-adventure-sub');
+        const encourageBtn = els.btnEncourage;
         if (advInfoEl && advSubEl) {
             ensureSonBehaviorState();
             const act = gameState.son.homeActionCount || 0;
@@ -5962,6 +5939,11 @@ function updateUI() {
                 advInfoEl.innerText = '🏠 집에 있어요';
                 advSubEl.innerText = `배고프거나 피곤하면 엄마를 찾을 거예요. · ${actLine}`;
             }
+        }
+        if (encourageBtn) {
+            const show = (gameState.son.state === 'ADVENTURING') && !gameState.son.adventureEncouraged;
+            encourageBtn.style.display = show ? 'inline-flex' : 'none';
+            encourageBtn.disabled = !!gameState.son.adventureEncouraged;
         }
 
         // Next adventure buff info
@@ -6638,7 +6620,7 @@ function diffLabel(diffKey) {
 }
 
 // ============================================================
-// #4 — Dynamic Adventure with Live View + Loot + Encourage
+// #4 — Dynamic Adventure with Letters + Loot + Encourage
 // ============================================================
 let adventureInterval = null;
 
@@ -6649,7 +6631,6 @@ function ensureAdventureInterval() {
 
     // Resume ticking after reload / refresh.
     const adv = gameState.son.adventure;
-    updateAdventureScene(adv.ticks || 0, adv.totalTicks || 60);
     if (els.btnEncourage) els.btnEncourage.disabled = !!gameState.son.adventureEncouraged;
 
     adventureInterval = setInterval(() => {
@@ -6658,8 +6639,6 @@ function ensureAdventureInterval() {
         gameState.son.adventure.ticks++;
         const ticks = gameState.son.adventure.ticks;
         const total = gameState.son.adventure.totalTicks;
-        if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
-        updateAdventureScene(ticks, total);
         maybeSendAdventureMail(ticks, total);
         if (ticks >= total) {
             clearInterval(adventureInterval);
@@ -6828,7 +6807,6 @@ function startAdventure() {
         if (els.sprite) els.sprite.style.display = 'none';
         if (els.btnEncourage) els.btnEncourage.disabled = false;
         updateUI();
-        updateAdventureScene(0, totalTicks);
 
         adventureInterval = setInterval(() => {
             if (isGamePaused) return;
@@ -6836,8 +6814,6 @@ function startAdventure() {
             gameState.son.adventure.ticks++;
             const ticks = gameState.son.adventure.ticks;
             const total = gameState.son.adventure.totalTicks;
-            if (els.advProgress) els.advProgress.style.width = `${(ticks / total) * 100}%`;
-            updateAdventureScene(ticks, total);
             maybeSendAdventureMail(ticks, total);
             if (ticks >= total) {
                 clearInterval(adventureInterval);
@@ -6869,20 +6845,6 @@ function startAdventure() {
             beginAdventureTicks();
         }
     });
-}
-
-function updateAdventureScene(tick, totalTicks = 60) {
-    const t60 = (tick / totalTicks) * 60;
-    let scene = adventureScenes[0];
-    for (const s of adventureScenes) {
-        if (t60 >= s.tick) scene = s;
-    }
-    if (els.advSceneEmoji) els.advSceneEmoji.innerText = scene.emoji;
-    if (els.advSceneText) els.advSceneText.innerText = scene.text;
-    if (els.advSceneSub) {
-        const zoneName = gameState.son.adventure ? `${getZoneById(gameState.son.adventure.zoneId).emoji} ${getZoneById(gameState.son.adventure.zoneId).name}` : '';
-        els.advSceneSub.innerText = zoneName ? `${zoneName} · ${scene.sub}` : scene.sub;
-    }
 }
 
 // Photo mails (warm/casual/sentimental). Images are generated from assets/reference/son_refer.png.
@@ -7475,10 +7437,9 @@ function encourageSon() {
     if (gameState.son.adventureEncouraged) return;
     gameState.son.adventureEncouraged = true;
     if (els.btnEncourage) els.btnEncourage.disabled = true;
-    showToast("💌 아들에게 응원 편지를 보냈습니다!", 'info');
+    showToast("💌 응원을 보냈습니다! (이번 모험 +20%)", 'info');
     gameState.son.affinity.affection = Math.min(100, gameState.son.affinity.affection + 3);
     gameState.son.affinity.trust = Math.min(100, gameState.son.affinity.trust + 2);
-    addMail("💌 응원 편지", "아들에게 응원 편지를 보냈습니다. 다음 모험에서 더 좋은 결과가...");
     updateUI();
 }
 window.encourageSon = encourageSon;

@@ -202,15 +202,6 @@
 	                <div class="son-state-label" id="son-state-label">대기 중...</div>
 	            </div>
 
-            <!-- Adventure Live View (shown when son is adventuring) -->
-            <div class="adventure-view" id="adventure-view">
-                <div class="adventure-scene-emoji" id="adv-scene-emoji">🌲</div>
-                <div class="adventure-scene-text" id="adv-scene-text">아들이 모험을 떠났습니다...</div>
-                <div class="adventure-scene-sub" id="adv-scene-sub">숲으로 향하는 중</div>
-                <div class="adventure-progress-bar"><div class="adventure-progress-fill" id="adv-progress" style="width:0%"></div></div>
-                <button class="encourage-btn" id="btn-encourage" onclick="encourageSon()">💌 응원 편지 보내기</button>
-            </div>
-
             <!-- Upgrade Buttons (positioned in each room) -->
             <button class="upgrade-btn" id="upgrade-bed" onclick="upgradeFurniture('bed')" style="display:none;">⬆️ 침대 업그레이드</button>
             <button class="upgrade-btn" id="upgrade-desk" onclick="upgradeFurniture('desk')" style="display:none;">⬆️ 서재 업그레이드</button>
@@ -312,7 +303,10 @@
 				                                <div style="font-size:0.78rem; color:#64748b; font-weight:900;">현재 목표</div>
 				                                <div id="next-goal" style="margin-top:6px; font-size:0.88rem; color:#0f172a; font-weight:1000;">-</div>
 				                                <div id="next-goal-sub" style="margin-top:6px; font-size:0.78rem; color:#64748b;">성향과 전투력에 따라 아들이 목표를 정합니다.</div>
-				                                <div id="son-adventure-info" style="margin-top:8px; font-size:0.82rem; color:#0f172a; font-weight:1000;">-</div>
+				                                <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+				                                    <div id="son-adventure-info" style="font-size:0.82rem; color:#0f172a; font-weight:1000;">-</div>
+				                                    <button class="seg-btn" id="btn-encourage" type="button" style="display:none; flex:0 0 auto; padding:7px 10px; font-size:0.78rem;" title="모험 중 1회: 응원(+20%)" onclick="encourageSon()">💌 응원</button>
+				                                </div>
 				                                <div id="son-adventure-sub" style="margin-top:4px; font-size:0.78rem; color:#64748b;"></div>
 				                                <div id="goal-progress" style="margin-top:8px; font-size:0.82rem; color:#0f172a; font-weight:1000;"></div>
 				                                <div id="goal-checklist" style="margin-top:8px;"></div>
