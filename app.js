@@ -1717,16 +1717,16 @@ function decideAdventureDifficulty() {
 // ============================================================
 const zones = [
     { id: 'meadow', name: '햇살 초원', emoji: '🌼', recCP: 25, baseGold: 60, injuryRisk: 0.05, drops: [{ key: 'herb', prob: 35, min: 1, max: 2 }, { key: 'seed', prob: 22, min: 1, max: 2 }, { key: 'leather', prob: 18, min: 1, max: 2 }] },
-    { id: 'forest', name: '속삭이는 숲', emoji: '🌲', recCP: 55, baseGold: 90, injuryRisk: 0.10, drops: [{ key: 'monster_bone', prob: 30, min: 1, max: 2 }, { key: 'wolf_fang', prob: 18, min: 1, max: 1 }, { key: 'seed', prob: 16, min: 1, max: 2 }, { key: 'leather', prob: 30, min: 1, max: 2 }] },
-    { id: 'ruins', name: '부서진 유적', emoji: '🏛️', recCP: 110, baseGold: 140, injuryRisk: 0.14, drops: [{ key: 'magic_crystal', prob: 20, min: 1, max: 1 }, { key: 'relic_fragment', prob: 18, min: 1, max: 2 }, { key: 'monster_bone', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 26, min: 1, max: 2 }] },
-    { id: 'mountain', name: '바람 산맥', emoji: '🏔️', recCP: 210, baseGold: 220, injuryRisk: 0.18, drops: [{ key: 'rare_hide', prob: 22, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 14, min: 1, max: 1 }, { key: 'magic_crystal', prob: 16, min: 1, max: 1 }, { key: 'steel', prob: 18, min: 1, max: 2 }] },
-    { id: 'dragon_lair', name: '드래곤 둥지', emoji: '🐉', recCP: 380, baseGold: 380, injuryRisk: 0.26, drops: [{ key: 'dragon_heart', prob: 8, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 22, min: 1, max: 2 }] }
+    { id: 'forest', name: '속삭이는 숲', emoji: '🌲', recCP: 55, baseGold: 90, injuryRisk: 0.10, drops: [{ key: 'monster_bone', prob: 30, min: 1, max: 2 }, { key: 'wolf_fang', prob: 28, min: 1, max: 2 }, { key: 'seed', prob: 16, min: 1, max: 2 }, { key: 'leather', prob: 30, min: 1, max: 2 }] },
+    { id: 'ruins', name: '부서진 유적', emoji: '🏛️', recCP: 110, baseGold: 140, injuryRisk: 0.14, drops: [{ key: 'magic_crystal', prob: 20, min: 1, max: 1 }, { key: 'relic_fragment', prob: 26, min: 1, max: 2 }, { key: 'monster_bone', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 26, min: 1, max: 2 }] },
+    { id: 'mountain', name: '바람 산맥', emoji: '🏔️', recCP: 210, baseGold: 220, injuryRisk: 0.18, drops: [{ key: 'rare_hide', prob: 22, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 16, min: 1, max: 1 }, { key: 'steel', prob: 18, min: 1, max: 2 }] },
+    { id: 'dragon_lair', name: '드래곤 둥지', emoji: '🐉', recCP: 380, baseGold: 380, injuryRisk: 0.26, drops: [{ key: 'dragon_heart', prob: 12, min: 1, max: 1 }, { key: 'wyvern_scale', prob: 20, min: 1, max: 2 }, { key: 'magic_crystal', prob: 22, min: 1, max: 2 }, { key: 'steel', prob: 22, min: 1, max: 2 }] }
 ];
 
 const missions = [
-    { id: 'gather', name: '재료 수집', emoji: '🧺', rewardMul: 0.9, expMul: 0.9, riskMul: 0.8 },
-    { id: 'hunt', name: '정예 처치', emoji: '🎯', rewardMul: 1.05, expMul: 1.05, riskMul: 1.1 },
-    { id: 'boss', name: '보스 도전', emoji: '👑', rewardMul: 1.25, expMul: 1.15, riskMul: 1.35 }
+    { id: 'gather', name: '재료 수집', emoji: '🧺', rewardMul: 0.9, goldMul: 0.86, lootMul: 1.28, expMul: 0.9, riskMul: 0.8 },
+    { id: 'hunt', name: '정예 처치', emoji: '🎯', rewardMul: 1.05, goldMul: 1.02, lootMul: 1.05, expMul: 1.05, riskMul: 1.1 },
+    { id: 'boss', name: '보스 도전', emoji: '👑', rewardMul: 1.25, goldMul: 1.12, lootMul: 1.10, expMul: 1.15, riskMul: 1.35 }
 ];
 
 function getZoneById(id) {
@@ -3292,6 +3292,52 @@ function consumeNeeds(needs) {
     });
 }
 
+function pickZoneCoreKey(zoneId) {
+    if (zoneId === 'forest') return 'wolf_fang';
+    if (zoneId === 'ruins') return 'relic_fragment';
+    if (zoneId === 'mountain') return 'wyvern_scale';
+    if (zoneId === 'dragon_lair') return 'dragon_heart';
+    return null;
+}
+
+function grantGuaranteedZoneDrop({ zone, mission, outcome }) {
+    if (!zone || !Array.isArray(zone.drops) || zone.drops.length === 0) return null;
+    const failChance = 0.5;
+    if (outcome === 'fail' && Math.random() > failChance) return null;
+
+    const missionId = mission?.id || 'gather';
+    const coreKey = pickZoneCoreKey(zone.id);
+
+    // Prefer non-seed materials when possible
+    const nonSeed = zone.drops.filter(d => d && d.key && d.key !== 'seed');
+    const pool = nonSeed.length ? nonSeed : zone.drops;
+
+    const weighted = pool.map(d => {
+        let w = Math.max(0.001, d.prob || 1);
+        // Gather mission should feel materially rewarding
+        if (missionId === 'gather') w *= 1.25;
+        // Boss mission should tilt slightly toward the core drop
+        if (missionId === 'boss' && coreKey && d.key === coreKey) w *= 1.35;
+        // Core item bias (still random, but less frustrating)
+        if (coreKey && d.key === coreKey) w *= 1.35;
+        return { drop: d, w };
+    });
+    const picked = rollFromWeights(weighted);
+    const d = picked?.drop || weighted[0]?.drop;
+    if (!d) return null;
+
+    const min = Math.max(1, Math.floor(d.min || 1));
+    const max = Math.max(min, Math.floor(d.max || min));
+    let amount = min + Math.floor(Math.random() * (max - min + 1));
+
+    // Outcome bonus: better runs bring a little more stuff home
+    if (outcome === 'success' && Math.random() < 0.35) amount += 1;
+    if (outcome === 'great' && Math.random() < 0.70) amount += 1;
+    amount = Math.max(1, amount);
+
+    return { key: d.key, amount };
+}
+
 function tierStageMaterials(tier) {
     if (tier <= 3) return { core: 'wolf_fang', baseA: 'leather', baseB: 'steel' };
     if (tier <= 6) return { core: 'relic_fragment', baseA: 'steel', baseB: 'magic_crystal' };
@@ -3330,14 +3376,15 @@ function buildGearRecipe(slot, tier) {
     ensureLootKey(stage.baseA);
     ensureLootKey(stage.baseB);
 
-    const coreQty = tier <= 3 ? 1 : tier <= 6 ? 2 : tier <= 9 ? 3 : 1;
-    const baseAQty = 1 + Math.floor(tier * 0.9);
-    const baseBQty = tier <= 3 ? 0 + Math.floor(tier * 0.3) : 1 + Math.floor(tier * 0.6);
+    // Balance: crafting should progress steadily with adventure drops.
+    const coreQty = tier <= 3 ? 1 : tier <= 6 ? 2 : tier <= 9 ? 2 : 1;
+    const baseAQty = 1 + Math.floor(tier * 0.7);
+    const baseBQty = tier <= 3 ? Math.floor(tier * 0.2) : 1 + Math.floor(tier * 0.45);
 
     // Slot-specific bias
     const needs = {};
-    needs[stage.core] = coreQty + (slot === 'armor' ? 1 : 0);
-    needs[stage.baseA] = baseAQty + (slot === 'armor' ? 2 : slot === 'boots' ? -1 : 0);
+    needs[stage.core] = coreQty + (slot === 'armor' && tier <= 6 ? 1 : 0);
+    needs[stage.baseA] = baseAQty + (slot === 'armor' ? 1 : slot === 'boots' ? -1 : 0);
     if (baseBQty > 0) needs[stage.baseB] = baseBQty + (slot === 'helmet' ? 1 : 0);
 
     const id = `${slot}_t${tier}`;
@@ -5469,7 +5516,9 @@ function completeAdventure() {
         Math.random() < diff.maverickChance;
     const rebellionBonus = rebellionMaverick ? 1.08 : 1.0;
 
-    const earnedGold = Math.floor((zone.baseGold + cp * 3.2 + Math.random() * 160) * diff.goldMul * mission.rewardMul * outcomeMul);
+    const missionGoldMul = Number.isFinite(mission.goldMul) ? mission.goldMul : (Number.isFinite(mission.rewardMul) ? mission.rewardMul : 1.0);
+    const missionLootMul = Number.isFinite(mission.lootMul) ? mission.lootMul : (Number.isFinite(mission.rewardMul) ? mission.rewardMul : 1.0);
+    const earnedGold = Math.floor((zone.baseGold + cp * 3.2 + Math.random() * 160) * diff.goldMul * missionGoldMul * outcomeMul);
     const encourageBonus = gameState.son.adventureEncouraged ? 1.2 : 1.0;
     let finalGold = Math.floor(earnedGold * encourageBonus * rebellionBonus);
     if (appliedBuff?.goldMul) finalGold = Math.floor(finalGold * appliedBuff.goldMul);
@@ -5477,14 +5526,16 @@ function completeAdventure() {
     if (sendoff?.goldMul) finalGold = Math.floor(finalGold * sendoff.goldMul);
 
     const lootResults = [];
-    const lootPasses = rebellionMaverick ? 2 : 1;
+    const lootPasses = (rebellionMaverick ? 2 : 1) + (mission.id === 'gather' ? 1 : 0) + (outcome === 'great' ? 1 : 0);
     const lootBuffMul = (appliedBuff?.lootMul ?? 1.0) * (job?.lootMul ?? 1.0) * (sendoff?.lootMul ?? 1.0);
+    let zoneDropHits = 0;
+    let nonSeedHits = 0;
 
     // Core loot table
     for (let pass = 0; pass < lootPasses; pass++) {
         for (const item of lootTable) {
-            const passMul = pass === 0 ? 1.0 : 0.45;
-            const prob = Math.min(95, item.prob * diff.lootMul * lootBuffMul * mission.rewardMul * passMul * outcomeMul);
+            const passMul = pass === 0 ? 1.0 : pass === 1 ? 0.45 : 0.25;
+            const prob = Math.min(95, item.prob * diff.lootMul * lootBuffMul * missionLootMul * passMul * outcomeMul);
             if (gameState.son.level >= item.minLv && Math.random() * 100 < prob) {
                 const amount = 1 + Math.floor(Math.random() * 2);
                 if (item.key === 'seed') {
@@ -5503,7 +5554,7 @@ function completeAdventure() {
     // Zone drops
     if (zone?.drops?.length) {
         for (const drop of zone.drops) {
-            const prob = Math.min(95, drop.prob * diff.lootMul * lootBuffMul * mission.rewardMul * outcomeMul);
+            const prob = Math.min(95, drop.prob * diff.lootMul * lootBuffMul * missionLootMul * outcomeMul);
             if (Math.random() * 100 < prob) {
                 const amount = drop.min + Math.floor(Math.random() * (drop.max - drop.min + 1));
                 if (drop.key === 'seed') {
@@ -5515,6 +5566,24 @@ function completeAdventure() {
                     gameState.parent.loot[drop.key].count += amount;
                     lootResults.push(`${gameState.parent.loot[drop.key]?.name || drop.key} x${amount}`);
                 }
+                zoneDropHits++;
+                if (drop.key !== 'seed') nonSeedHits++;
+            }
+        }
+    }
+
+    // Guarantee: bring home at least one zone material (helps crafting feel consistent)
+    if (zone && (zoneDropHits === 0 || nonSeedHits === 0)) {
+        const g = grantGuaranteedZoneDrop({ zone, mission, outcome });
+        if (g) {
+            if (g.key === 'seed') {
+                ensureFarm();
+                gameState.parent.farm.seed += g.amount;
+                lootResults.push(`🌱 씨앗 x${g.amount}`);
+            } else {
+                ensureLootKey(g.key);
+                gameState.parent.loot[g.key].count += g.amount;
+                lootResults.push(`${gameState.parent.loot[g.key]?.name || g.key} x${g.amount}`);
             }
         }
     }
